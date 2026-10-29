@@ -91,6 +91,9 @@ input{padding:10px;background:rgba(10,12,24,.85);border:1px solid rgba(255,200,5
       <button onclick="startInstantOnlineMatch()" class="btn-online" id="btn-instant">⚡ ონლაინ თამაში (Instant Match)</button>
       <button onclick="startMatchHost()" style="margin-top:8px" id="btn-host">🌐 ოთახის შექმნა (Host Code)</button>
       <button onclick="startBotMatch()" class="btn-sec" style="margin-top:8px" id="btn-bot">🤖 3D ბოტებთან თამაში (Offline)</button>
+      <button onclick="document.getElementById('glb-picker').click()" style="margin-top:8px;background:linear-gradient(135deg,#7b1fa2,#e040fb)">📂 GLB ფაილების არჩევა (აირჩიე ყველა ერთად)</button>
+      <input type="file" id="glb-picker" accept=".glb,.gltf" multiple class="hidden" onchange="loadPickedGLBs(this.files)">
+      <div id="glb-picked" style="margin-top:6px;font-size:.85rem;color:#ffd700">ჩატვირთული GLB: 0</div>
       <hr style="border-color:rgba(255,200,50,.15);margin:12px 0">
       <h2 id="txt-friends">👥 მეგობრების სია / შეერთება</h2>
       <div style="display:flex;gap:6px">
@@ -283,7 +286,19 @@ function setStatus(file,ok){
   row.style.color=ok?'#7f7':'#f77';
 }
 // tries: name, name.glb (if missing), name.glb.glb, name without double extension
+const pickedGLB={};   // name (no extension) -> ArrayBuffer
+const glbKey=n=>n.toLowerCase().replace(/(\.glb|\.gltf)+$/i,'');
+async function loadPickedGLBs(files){
+  for(const f of files) pickedGLB[glbKey(f.name)]=await f.arrayBuffer();
+  const names=Object.keys(pickedGLB);
+  txt('glb-picked','ჩატვირთული GLB: '+names.length+' ('+names.join(', ')+')');
+}
 function loadGLBSmart(filename,onSuccess,onError){
+  const key=glbKey(filename);
+  if(pickedGLB[key]){
+    gltfLoader.parse(pickedGLB[key].slice(0),'',g=>{setStatus(filename,true);onSuccess(g);},()=>{setStatus(filename,false);if(onError)onError();});
+    return;
+  }
   const base=filename.replace(/(\.glb)+$/i,'');
   const tries=[base+'.glb',base+'.glb.glb',base+'.GLB',base];
   const next=i=>{
