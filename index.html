@@ -1,1293 +1,612 @@
 <!DOCTYPE html>
 <html lang="ka">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CS Lite Online 3D - Audio & WebGL Edition</title>
-
-    <!-- PeerJS for Multiplayer -->
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-    <!-- Three.js Engine -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- Three.js GLTFLoader for 3D GLB Models -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700;800&display=swap" rel="stylesheet">
-    
-    <style>
-        * { box-sizing: border-box; font-family: 'Rajdhani', sans-serif; user-select: none; margin: 0; padding: 0; }
-        body, html { width: 100%; height: 100%; background: #05070c; color: #fff; overflow: hidden; touch-action: none; }
-        
-        #canvas3D { width: 100%; height: 100%; display: block; position: absolute; top: 0; left: 0; z-index: 1; }
-
-        .screen { position: absolute; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; pointer-events: none; }
-        .interactive-ui { pointer-events: auto; }
-        .hidden { display: none !important; }
-
-        #landscape-warning {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(5, 7, 12, 0.96); z-index: 999; display: none;
-            flex-direction: column; align-items: center; justify-content: center;
-            text-align: center; color: #55ff55; font-size: 1.5rem; font-weight: bold; padding: 20px;
-        }
-
-        @media screen and (orientation: portrait) and (max-width: 900px) {
-            #landscape-warning { display: flex !important; }
-        }
-
-        .header { 
-            position: absolute; top: 12px; left: 15px; right: 15px; 
-            display: flex; justify-content: space-between; align-items: center;
-            font-size: 1.1rem; font-weight: 700; 
-            background: rgba(15, 20, 28, 0.92); backdrop-filter: blur(16px);
-            padding: 10px 24px; border-radius: 12px; 
-            border: 1px solid rgba(255, 200, 50, 0.4);
-            box-shadow: 0 0 30px rgba(0,0,0,0.9);
-        }
-        .coin-val { color: #ffd700; text-shadow: 0 0 10px rgba(255,215,0,0.6); }
-        .lvl-val { color: #55ff55; text-shadow: 0 0 10px rgba(85,255,85,0.6); }
-
-        .lang-btn {
-            background: rgba(255, 200, 50, 0.2); border: 1px solid #ffc832; color: #fff;
-            padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: bold;
-        }
-
-        .lobby-main { display: flex; gap: 15px; margin-top: 55px; width: 96%; max-width: 1280px; height: 80vh; }
-        
-        .panel { 
-            background: rgba(18, 22, 30, 0.92); backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 200, 50, 0.3); border-radius: 16px; 
-            padding: 18px; flex: 1; display: flex; flex-direction: column; 
-            box-shadow: 0 10px 40px rgba(0,0,0,0.85);
-        }
-        
-        h2 { color: #ffc832; text-transform: uppercase; letter-spacing: 2px; font-size: 1.25rem; margin-bottom: 12px; text-shadow: 0 0 12px rgba(255,200,50,0.5); }
-        
-        button { 
-            background: linear-gradient(135deg, #d32f2f, #f57c00); border: none; color: white; 
-            padding: 12px 18px; border-radius: 8px; font-weight: 800; cursor: pointer; 
-            font-size: 0.95rem; transition: all 0.2s ease; text-transform: uppercase;
-            box-shadow: 0 4px 18px rgba(211,47,47,0.45);
-        }
-        button:hover { transform: translateY(-1px); filter: brightness(1.1); }
-        
-        button.btn-sec { 
-            background: linear-gradient(135deg, #388e3c, #66bb6a); color: #fff; 
-            box-shadow: 0 4px 18px rgba(56,142,60,0.45);
-        }
-
-        button.btn-online {
-            background: linear-gradient(135deg, #1976d2, #00d2ff); color: #fff;
-            box-shadow: 0 4px 20px rgba(0,210,255,0.4); font-size: 1.05rem; padding: 14px;
-        }
-
-        .mode-selector { display: flex; gap: 6px; margin-bottom: 12px; }
-        .mode-btn { 
-            flex: 1; padding: 8px 2px; background: rgba(10, 12, 24, 0.7); 
-            border: 2px solid rgba(255, 200, 50, 0.3); color: #fff; text-align: center; 
-            border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.85rem;
-        }
-        .mode-btn.active { border-color: #ffc832; background: rgba(255, 200, 50, 0.25); box-shadow: 0 0 15px rgba(255,200,50,0.5); }
-
-        input { 
-            padding: 10px; background: rgba(10, 12, 24, 0.85); border: 1px solid rgba(255, 200, 50, 0.35); 
-            color: #fff; border-radius: 8px; margin-bottom: 8px; font-size: 0.9rem; outline: none;
-        }
-
-        .friend-item { 
-            display: flex; justify-content: space-between; align-items: center; 
-            background: rgba(25, 30, 42, 0.85); padding: 8px 12px; border-radius: 8px; 
-            margin-bottom: 6px; border-left: 4px solid #ffc832; font-size: 0.85rem;
-        }
-
-        .weapon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; overflow-y: auto; height: 100%; padding-right: 6px; }
-        .weapon-card { 
-            background: rgba(25, 30, 42, 0.92); border: 1px solid rgba(255,255,255,0.15); 
-            padding: 14px; border-radius: 12px; text-align: center; position: relative;
-            display: flex; flex-direction: column; align-items: center; justify-content: space-between;
-            transition: transform 0.2s, border-color 0.2s;
-        }
-        .weapon-card:hover { transform: translateY(-2px); border-color: rgba(255,200,50,0.6); }
-        .weapon-card.equipped { border-color: #55ff55; background: rgba(85, 255, 85, 0.15); box-shadow: 0 0 15px rgba(85,255,85,0.25); }
-        
-        .weapon-3d-tag {
-            background: linear-gradient(135deg, #00d2ff, #0055ff); color: #fff; font-size: 0.7rem; font-weight: 800;
-            padding: 3px 8px; border-radius: 4px; letter-spacing: 1px; margin-bottom: 8px; text-transform: uppercase;
-        }
-        .weapon-model-preview {
-            width: 100%; height: 90px; background: radial-gradient(circle, rgba(40,50,70,0.9) 0%, rgba(10,14,22,0.95) 100%);
-            border-radius: 8px; border: 1px solid rgba(0,210,255,0.3); display: flex; flex-direction: column;
-            align-items: center; justify-content: center; margin-bottom: 8px; padding: 6px;
-        }
-        .model-file-badge { font-family: monospace; font-weight: 700; color: #00f0ff; font-size: 0.9rem; text-shadow: 0 0 8px rgba(0,240,255,0.5); }
-
-        #hud { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10; }
-        
-        .cs-scoreboard {
-            position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
-            display: flex; align-items: center; gap: 8px;
-            background: rgba(0, 0, 0, 0.75); padding: 6px 20px; border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.2); font-weight: bold;
-        }
-        .team-score { font-size: 1.8rem; font-weight: 800; padding: 0 10px; }
-        .ct-score { color: #4b8eff; }
-        .t-score { color: #de9b35; }
-        .match-clock { font-size: 1.2rem; color: #fff; background: rgba(0,0,0,0.5); padding: 4px 10px; border-radius: 6px; }
-
-        .cam-mode-indicator {
-            position: absolute; top: 18px; left: 20px;
-            background: rgba(0,0,0,0.75); border: 1px solid #ffc832; color: #ffc832;
-            padding: 6px 14px; border-radius: 6px; font-weight: bold; font-size: 0.85rem; pointer-events: auto; cursor: pointer;
-        }
-
-        .weapon-bar-hud {
-            position: absolute; bottom: 85px; right: 35px;
-            display: flex; gap: 8px; pointer-events: auto;
-        }
-        .weapon-slot-btn {
-            background: rgba(18, 22, 30, 0.85); border: 1px solid rgba(255, 200, 50, 0.4);
-            color: #ffc832; padding: 6px 12px; border-radius: 6px; font-weight: bold;
-            font-size: 0.85rem; cursor: pointer; transition: all 0.2s;
-        }
-        .weapon-slot-btn.active {
-            background: rgba(255, 200, 50, 0.3); border-color: #55ff55; color: #55ff55;
-            box-shadow: 0 0 10px rgba(85,255,85,0.4);
-        }
-
-        #killfeed {
-            position: absolute; top: 20px; right: 20px;
-            display: flex; flex-direction: column; gap: 6px; align-items: flex-end;
-        }
-        .kill-msg {
-            background: rgba(0,0,0,0.75); border-left: 4px solid #3388ff;
-            padding: 6px 14px; border-radius: 4px; font-size: 0.95rem; font-weight: 700;
-            color: #88ccff; text-shadow: 1px 1px 2px #000; animation: fadeOut 5s forwards;
-            display: flex; align-items: center; gap: 8px;
-        }
-
-        #crosshair {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 22px; height: 22px; pointer-events: none;
-        }
-        #crosshair::before {
-            content: ''; position: absolute; top: 10px; left: 0; width: 22px; height: 2px; background: #00ff00; box-shadow: 0 0 5px #00ff00;
-        }
-        #crosshair::after {
-            content: ''; position: absolute; top: 0; left: 10px; width: 2px; height: 22px; background: #00ff00; box-shadow: 0 0 5px #00ff00;
-        }
-
-        /* AWP / Sniper Scope Overlay */
-        #sniper-scope-overlay {
-            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-            pointer-events: none; z-index: 15; display: none;
-            background: radial-gradient(circle at center, transparent 30%, rgba(0, 0, 0, 0.98) 32%, #000 100%);
-        }
-        #sniper-scope-overlay::before {
-            content: ''; position: absolute; top: 0; left: 50%; width: 2px; height: 100vh; background: rgba(0, 0, 0, 0.85); transform: translateX(-50%);
-        }
-        #sniper-scope-overlay::after {
-            content: ''; position: absolute; top: 50%; left: 0; width: 100vw; height: 2px; background: rgba(0, 0, 0, 0.85); transform: translateY(-50%);
-        }
-
-        .cs-money {
-            position: absolute; bottom: 25px; left: 35px;
-            font-size: 2.5rem; font-weight: 900; color: #55ff55;
-            text-shadow: 0 0 12px rgba(85,255,85,0.8), 2px 2px 4px #000;
-        }
-        .cs-hp-container {
-            position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%);
-            display: flex; align-items: center; gap: 12px;
-            font-size: 2.5rem; font-weight: 900; color: #ffda55;
-            text-shadow: 0 0 12px rgba(255,218,85,0.8), 2px 2px 4px #000;
-        }
-        .hp-bar-bg { width: 160px; height: 14px; background: rgba(0,0,0,0.75); border: 1px solid #ffda55; border-radius: 7px; overflow: hidden; }
-        .hp-bar-fill { width: 100%; height: 100%; background: linear-gradient(90deg, #ff9900, #ffda55); transition: width 0.2s; }
-
-        .cs-ammo {
-            position: absolute; bottom: 25px; right: 35px;
-            font-size: 2.5rem; font-weight: 900; color: #ffffff;
-            text-shadow: 0 0 12px rgba(255,255,255,0.8), 2px 2px 4px #000;
-            display: flex; align-items: center; gap: 10px;
-        }
-
-        #touch-controls { position: absolute; bottom: 0; left: 0; right: 0; top: 0; pointer-events: none; display: none; z-index: 10; }
-        
-        .joystick-container { 
-            position: absolute; bottom: 30px; left: 35px; width: 110px; height: 110px; 
-            background: rgba(255, 200, 50, 0.1); border: 2px solid rgba(255, 200, 50, 0.5); 
-            border-radius: 50%; pointer-events: auto; touch-action: none; display: flex; 
-            align-items: center; justify-content: center; box-shadow: 0 0 20px rgba(0,0,0,0.6);
-        }
-        .joystick-knob { 
-            width: 45px; height: 45px; background: radial-gradient(circle, #ffc832 0%, #f57c00 100%); 
-            border-radius: 50%; box-shadow: 0 0 15px rgba(255,200,50,0.8); pointer-events: none; 
-            transition: transform 0.05s ease-out;
-        }
-
-        .mobile-action-btns { position: absolute; bottom: 25px; right: 25px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; pointer-events: auto; }
-        .mob-action-btn { 
-            width: 52px; height: 52px; background: rgba(18, 22, 30, 0.85); border: 2px solid #ffc832; 
-            border-radius: 50%; color: #fff; font-size: 1rem; font-weight: bold; display: flex; 
-            flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(0,0,0,0.6); cursor: pointer;
-        }
-
-        .fire-mob-btn {
-            position: absolute; bottom: 90px; right: 90px; width: 68px; height: 68px;
-            background: radial-gradient(circle, #ff3300 0%, #990000 100%); border: 3px solid #ff9900;
-            border-radius: 50%; color: #fff; font-size: 1.5rem; display: flex; align-items: center; justify-content: center;
-            pointer-events: auto; box-shadow: 0 0 20px rgba(255,51,0,0.6); cursor: pointer;
-        }
-        .scope-mob-btn {
-            position: absolute; bottom: 90px; right: 170px; width: 56px; height: 56px;
-            background: radial-gradient(circle, #00d2ff 0%, #0055ff 100%); border: 2px solid #00f0ff;
-            border-radius: 50%; color: #fff; font-size: 1.2rem; display: flex; align-items: center; justify-content: center;
-            pointer-events: auto; box-shadow: 0 0 15px rgba(0,210,255,0.6); cursor: pointer;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>CS Lite Online 3D - GLB Fixed</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;font-family:'Rajdhani',sans-serif;user-select:none;margin:0;padding:0}
+body,html{width:100%;height:100%;background:#05070c;color:#fff;overflow:hidden;touch-action:none}
+#canvas3D{width:100%;height:100%;display:block;position:absolute;top:0;left:0;z-index:1}
+.screen{position:absolute;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;pointer-events:none}
+.interactive-ui{pointer-events:auto}
+.hidden{display:none!important}
+#landscape-warning{position:fixed;inset:0;background:rgba(5,7,12,.96);z-index:999;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#55ff55;font-size:1.5rem;font-weight:bold;padding:20px}
+@media screen and (orientation:portrait) and (max-width:900px){#landscape-warning{display:flex!important}}
+.header{position:absolute;top:12px;left:15px;right:15px;display:flex;justify-content:space-between;align-items:center;font-size:1.1rem;font-weight:700;background:rgba(15,20,28,.92);padding:10px 24px;border-radius:12px;border:1px solid rgba(255,200,50,.4)}
+.coin-val{color:#ffd700}.lvl-val{color:#55ff55}
+.lang-btn{background:rgba(255,200,50,.2);border:1px solid #ffc832;color:#fff;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:.85rem;font-weight:bold;box-shadow:none}
+.lobby-main{display:flex;gap:15px;margin-top:55px;width:96%;max-width:1280px;height:80vh}
+.panel{background:rgba(18,22,30,.92);border:1px solid rgba(255,200,50,.3);border-radius:16px;padding:18px;flex:1;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.85)}
+h2{color:#ffc832;text-transform:uppercase;letter-spacing:2px;font-size:1.25rem;margin-bottom:12px}
+button{background:linear-gradient(135deg,#d32f2f,#f57c00);border:none;color:#fff;padding:12px 18px;border-radius:8px;font-weight:800;cursor:pointer;font-size:.95rem;text-transform:uppercase}
+button:hover{filter:brightness(1.1)}
+button.btn-sec{background:linear-gradient(135deg,#388e3c,#66bb6a)}
+button.btn-online{background:linear-gradient(135deg,#1976d2,#00d2ff);font-size:1.05rem;padding:14px}
+.mode-selector{display:flex;gap:6px;margin-bottom:12px}
+.mode-btn{flex:1;padding:8px 2px;background:rgba(10,12,24,.7);border:2px solid rgba(255,200,50,.3);text-align:center;border-radius:8px;font-weight:bold;cursor:pointer;font-size:.85rem}
+.mode-btn.active{border-color:#ffc832;background:rgba(255,200,50,.25)}
+input{padding:10px;background:rgba(10,12,24,.85);border:1px solid rgba(255,200,50,.35);color:#fff;border-radius:8px;margin-bottom:8px;font-size:.9rem;outline:none}
+.friend-item{display:flex;justify-content:space-between;align-items:center;background:rgba(25,30,42,.85);padding:8px 12px;border-radius:8px;margin-bottom:6px;border-left:4px solid #ffc832;font-size:.85rem}
+.weapon-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;overflow-y:auto;height:100%;padding-right:6px}
+.weapon-card{background:rgba(25,30,42,.92);border:1px solid rgba(255,255,255,.15);padding:14px;border-radius:12px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:space-between}
+.weapon-card.equipped{border-color:#55ff55;background:rgba(85,255,85,.15)}
+.weapon-3d-tag{background:linear-gradient(135deg,#00d2ff,#0055ff);font-size:.7rem;font-weight:800;padding:3px 8px;border-radius:4px;margin-bottom:8px}
+.weapon-model-preview{width:100%;height:90px;background:radial-gradient(circle,rgba(40,50,70,.9),rgba(10,14,22,.95));border-radius:8px;border:1px solid rgba(0,210,255,.3);display:flex;flex-direction:column;align-items:center;justify-content:center;margin-bottom:8px}
+.model-file-badge{font-family:monospace;font-weight:700;color:#00f0ff}
+#hud{position:absolute;inset:0;pointer-events:none;z-index:10}
+.cs-scoreboard{position:absolute;top:15px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.75);padding:6px 20px;border-radius:8px;border:1px solid rgba(255,255,255,.2);font-weight:bold}
+.team-score{font-size:1.8rem;font-weight:800;padding:0 10px}.ct-score{color:#4b8eff}.t-score{color:#de9b35}
+.match-clock{font-size:1.2rem;background:rgba(0,0,0,.5);padding:4px 10px;border-radius:6px}
+.cam-mode-indicator{position:absolute;top:18px;left:20px;background:rgba(0,0,0,.75);border:1px solid #ffc832;color:#ffc832;padding:6px 14px;border-radius:6px;font-weight:bold;font-size:.85rem;pointer-events:auto;box-shadow:none}
+#glb-status{position:absolute;top:62px;left:20px;background:rgba(0,0,0,.7);padding:8px 12px;border-radius:6px;font-size:.8rem;font-family:monospace;line-height:1.4;max-width:300px}
+#glb-status .warn{color:#ff6666;font-weight:bold;margin-bottom:4px}
+.weapon-bar-hud{position:absolute;bottom:85px;right:35px;display:flex;gap:8px;pointer-events:auto}
+.weapon-slot-btn{background:rgba(18,22,30,.85);border:1px solid rgba(255,200,50,.4);color:#ffc832;padding:6px 12px;border-radius:6px;font-weight:bold;font-size:.85rem;cursor:pointer}
+.weapon-slot-btn.active{background:rgba(255,200,50,.3);border-color:#55ff55;color:#55ff55}
+#killfeed{position:absolute;top:20px;right:20px;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.kill-msg{background:rgba(0,0,0,.75);border-left:4px solid #38f;padding:6px 14px;border-radius:4px;font-weight:700;color:#8cf}
+#crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:22px;height:22px}
+#crosshair::before{content:'';position:absolute;top:10px;left:0;width:22px;height:2px;background:#0f0}
+#crosshair::after{content:'';position:absolute;top:0;left:10px;width:2px;height:22px;background:#0f0}
+#sniper-scope-overlay{position:absolute;inset:0;pointer-events:none;z-index:15;display:none;background:radial-gradient(circle at center,transparent 30%,rgba(0,0,0,.98) 32%,#000 100%)}
+.cs-money{position:absolute;bottom:25px;left:35px;font-size:2.5rem;font-weight:900;color:#55ff55;text-shadow:2px 2px 4px #000}
+.cs-hp-container{position:absolute;bottom:25px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;font-size:2.5rem;font-weight:900;color:#ffda55;text-shadow:2px 2px 4px #000}
+.hp-bar-bg{width:160px;height:14px;background:rgba(0,0,0,.75);border:1px solid #ffda55;border-radius:7px;overflow:hidden}
+.hp-bar-fill{width:100%;height:100%;background:linear-gradient(90deg,#f90,#ffda55)}
+.cs-ammo{position:absolute;bottom:25px;right:35px;font-size:2.5rem;font-weight:900;text-shadow:2px 2px 4px #000}
+#touch-controls{position:absolute;inset:0;pointer-events:none;display:none;z-index:10}
+.joystick-container{position:absolute;bottom:30px;left:35px;width:110px;height:110px;background:rgba(255,200,50,.1);border:2px solid rgba(255,200,50,.5);border-radius:50%;pointer-events:auto;touch-action:none;display:flex;align-items:center;justify-content:center}
+.joystick-knob{width:45px;height:45px;background:radial-gradient(circle,#ffc832,#f57c00);border-radius:50%;pointer-events:none}
+.mobile-action-btns{position:absolute;bottom:25px;right:25px;display:grid;grid-template-columns:repeat(2,1fr);gap:10px;pointer-events:auto}
+.mob-action-btn{width:52px;height:52px;background:rgba(18,22,30,.85);border:2px solid #ffc832;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer}
+.fire-mob-btn{position:absolute;bottom:90px;right:90px;width:68px;height:68px;background:radial-gradient(circle,#f30,#900);border:3px solid #f90;border-radius:50%;font-size:1.5rem;display:flex;align-items:center;justify-content:center;pointer-events:auto}
+.scope-mob-btn{position:absolute;bottom:90px;right:170px;width:56px;height:56px;background:radial-gradient(circle,#00d2ff,#05f);border:2px solid #0ff;border-radius:50%;font-size:1.2rem;display:flex;align-items:center;justify-content:center;pointer-events:auto}
+</style>
 </head>
 <body>
+<div id="landscape-warning"><div style="font-size:3rem">📱🔄</div><div>გთხოვთ გადააბრუნოთ ტელეფონი<br><span style="color:#ffd700">LANDSCAPE</span> რეჟიმში</div></div>
+<canvas id="canvas3D"></canvas>
 
-    <div id="landscape-warning">
-        <div style="font-size:3rem; margin-bottom:10px;">📱🔄</div>
-        <div>გთხოვთ გადააბრუნოთ ტელეფონი<br><span style="color:#ffd700;">LANDSCAPE (ჰორიზონტალურ)</span> რეჟიმში</div>
+<div id="lobby" class="screen interactive-ui">
+  <div class="header">
+    <div>ID: <span id="player-id-display" style="color:#ffc832">...</span></div>
+    <div>LVL: <span id="lvl-display" class="lvl-val">1</span> (<span id="wins-display" style="color:#ffd700">0</span>/10 Wins)</div>
+    <div>COINS: <span id="coins-display" class="coin-val">0</span> 🪙</div>
+    <div><button class="lang-btn" onclick="toggleLanguage()">🌐 <span id="lang-label">GE</span></button></div>
+  </div>
+  <div class="lobby-main">
+    <div class="panel">
+      <h2 id="txt-matchmaking">🎮 CS LITE REALISTIC 3D WEAPONS & AUDIO</h2>
+      <div class="mode-selector">
+        <div class="mode-btn active" onclick="selectMode('1v1')" id="m1">1 VS 1</div>
+        <div class="mode-btn" onclick="selectMode('2v2')" id="m2">2 VS 2</div>
+        <div class="mode-btn" onclick="selectMode('3v3')" id="m3">3 VS 3</div>
+        <div class="mode-btn" onclick="selectMode('4v4')" id="m4">4 VS 4</div>
+      </div>
+      <button onclick="startInstantOnlineMatch()" class="btn-online" id="btn-instant">⚡ ონლაინ თამაში (Instant Match)</button>
+      <button onclick="startMatchHost()" style="margin-top:8px" id="btn-host">🌐 ოთახის შექმნა (Host Code)</button>
+      <button onclick="startBotMatch()" class="btn-sec" style="margin-top:8px" id="btn-bot">🤖 3D ბოტებთან თამაში (Offline)</button>
+      <hr style="border-color:rgba(255,200,50,.15);margin:12px 0">
+      <h2 id="txt-friends">👥 მეგობრების სია / შეერთება</h2>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="friend-id-input" placeholder="შეიყვანეთ მეგობრის ID" style="flex:1">
+        <button class="btn-sec" onclick="connectToFriendFromInput()" id="btn-add-friend">შეერთება</button>
+      </div>
+      <div id="friends-list" style="margin-top:6px;overflow-y:auto;flex:1"></div>
     </div>
-
-    <canvas id="canvas3D"></canvas>
-
-    <div id="lobby" class="screen interactive-ui">
-        <div class="header">
-            <div>ID: <span id="player-id-display" style="color:#ffc832;">...</span></div>
-            <div>LVL: <span id="lvl-display" class="lvl-val">1</span> (<span id="wins-display" style="color:#ffd700;">0</span>/10 Wins)</div>
-            <div>COINS: <span id="coins-display" class="coin-val">0</span> 🪙</div>
-            <div>
-                <button class="lang-btn" onclick="toggleLanguage()">🌐 <span id="lang-label">GE</span></button>
-            </div>
-        </div>
-
-        <div class="lobby-main">
-            <div class="panel">
-                <h2 id="txt-matchmaking">🎮 CS LITE REALISTIC 3D WEAPONS & AUDIO</h2>
-                
-                <div class="mode-selector">
-                    <div class="mode-btn active" onclick="selectMode('1v1')" id="m1">1 VS 1</div>
-                    <div class="mode-btn" onclick="selectMode('2v2')" id="m2">2 VS 2</div>
-                    <div class="mode-btn" onclick="selectMode('3v3')" id="m3">3 VS 3</div>
-                    <div class="mode-btn" onclick="selectMode('4v4')" id="m4">4 VS 4</div>
-                </div>
-
-                <button onclick="startInstantOnlineMatch()" class="btn-online" id="btn-instant">⚡ ონლაინ თამაში (Instant Match vs Real Players)</button>
-                <button onclick="startMatchHost()" style="margin-top:8px;" id="btn-host">🌐 ოთახის შექმნა (Host Room Code)</button>
-                <button onclick="startBotMatch()" class="btn-sec" style="margin-top:8px;" id="btn-bot">🤖 3D ბოტებთან თამაში (Offline)</button>
-                
-                <hr style="border-color:rgba(255,200,50,0.15); margin: 12px 0;">
-
-                <h2 id="txt-friends">👥 მეგობრების სია / შეერთება</h2>
-                <div style="display:flex; gap:6px;">
-                    <input type="text" id="friend-id-input" placeholder="შეიყვანეთ მეგობრის ID" style="flex:1;">
-                    <button class="btn-sec" onclick="connectToFriendFromInput()" id="btn-add-friend">შეერთება</button>
-                </div>
-                <div id="friends-list" style="margin-top:6px; overflow-y:auto; flex:1;"></div>
-            </div>
-
-            <div class="panel">
-                <h2 id="txt-shop">📦 CS 3D GLB მოდელების არსენალი</h2>
-                <div id="weapon-shop-container" class="weapon-grid"></div>
-            </div>
-        </div>
+    <div class="panel">
+      <h2 id="txt-shop">📦 CS 3D GLB მოდელების არსენალი</h2>
+      <div id="weapon-shop-container" class="weapon-grid"></div>
     </div>
+  </div>
+</div>
 
-    <div id="game-screen" class="screen hidden">
-        <div id="hud">
-            <button class="cam-mode-indicator" onclick="toggleCameraView()">🎥 VIEW: <span id="cam-mode-val">FPP (V)</span></button>
-
-            <div class="cs-scoreboard">
-                <span class="team-score ct-score" id="ct-score-val">5</span>
-                <span class="match-clock" id="timer-val">05:00</span>
-                <span class="team-score t-score" id="t-score-val">3</span>
-            </div>
-
-            <div id="killfeed">
-                <div class="kill-msg">Bot Fox 🔫 Bot Max</div>
-                <div class="kill-msg">Bot Storm 🔫 Bot Nikita</div>
-            </div>
-            
-            <div id="crosshair"></div>
-            <div id="sniper-scope-overlay"></div>
-
-            <div class="cs-money">$<span id="money-val">800</span></div>
-
-            <div class="cs-hp-container">
-                <span id="hp-val">100</span>
-                <div class="hp-bar-bg"><div id="hp-bar-fill" class="hp-bar-fill"></div></div>
-            </div>
-
-            <div class="weapon-bar-hud">
-                <div class="weapon-slot-btn active" id="slot-btn-1" onclick="switchWeaponSlot(1)">1: PRIMARY</div>
-                <div class="weapon-slot-btn" id="slot-btn-2" onclick="switchWeaponSlot(2)">2: PISTOL</div>
-                <div class="weapon-slot-btn" id="slot-btn-3" onclick="switchWeaponSlot(3)">3: KNIFE</div>
-            </div>
-
-            <div class="cs-ammo">
-                <span id="ammo-clip">30</span> / <span id="ammo-reserve">90</span> 🔫
-            </div>
-        </div>
-
-        <div id="touch-controls">
-            <div id="move-joy" class="joystick-container">
-                <div id="joy-knob" class="joystick-knob"></div>
-            </div>
-
-            <div class="fire-mob-btn" onclick="shoot3D()">🔫</div>
-            <div class="scope-mob-btn" onclick="toggleScopeZoom()">🔭</div>
-            
-            <div class="mobile-action-btns">
-                <div class="mob-action-btn" onclick="triggerMobileJump()">
-                    <span>⬆️</span>
-                    <span style="font-size:0.55rem;">JUMP</span>
-                </div>
-                <div class="mob-action-btn" onclick="toggleMobileCrouch()">
-                    <span>⬇️</span>
-                    <span style="font-size:0.55rem;">CROUCH</span>
-                </div>
-                <div class="mob-action-btn" onclick="throwGrenade('HE')">
-                    <span>💣</span>
-                    <span style="font-size:0.55rem;">NADE</span>
-                </div>
-                <div class="mob-action-btn" onclick="throwGrenade('SMOKE')">
-                    <span>💨</span>
-                    <span style="font-size:0.55rem;">SMOKE</span>
-                </div>
-            </div>
-        </div>
+<div id="game-screen" class="screen hidden">
+  <div id="hud">
+    <button class="cam-mode-indicator" onclick="toggleCameraView()">🎥 VIEW: <span id="cam-mode-val">FPP (V)</span></button>
+    <div id="glb-status"></div>
+    <div class="cs-scoreboard">
+      <span class="team-score ct-score" id="ct-score-val">0</span>
+      <span class="match-clock" id="timer-val">05:00</span>
+      <span class="team-score t-score" id="t-score-val">0</span>
     </div>
-
-    <script>
-        // ==========================================
-        // 🔊 WEB AUDIO SYNTHESIZER (NO MP3 FILES REQUIRED!)
-        // ==========================================
-        let audioCtx = null;
-
-        function initAudioContext() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
-        }
-
-        // Play Procedural Sound Effects using Web Audio API
-        function playSoundEffect(type) {
-            initAudioContext();
-            if (!audioCtx) return;
-
-            const now = audioCtx.currentTime;
-
-            if (type === 'SHOOT_AK47' || type === 'SHOOT_M4A4') {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(180, now);
-                osc.frequency.exponentialRampToValueAtTime(30, now + 0.15);
-                gain.gain.setValueAtTime(0.8, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
-                osc.connect(gain); gain.connect(audioCtx.destination);
-                osc.start(now); osc.stop(now + 0.18);
-
-                const bufferSize = audioCtx.sampleRate * 0.15;
-                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const data = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-
-                const noise = audioCtx.createBufferSource();
-                noise.buffer = buffer;
-                const noiseGain = audioCtx.createGain();
-                noiseGain.gain.setValueAtTime(0.9, now);
-                noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-                noise.connect(noiseGain); noiseGain.connect(audioCtx.destination);
-                noise.start(now);
-            } 
-            else if (type === 'SHOOT_AWP') {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(280, now);
-                osc.frequency.exponentialRampToValueAtTime(20, now + 0.4);
-                gain.gain.setValueAtTime(1.0, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
-                osc.connect(gain); gain.connect(audioCtx.destination);
-                osc.start(now); osc.stop(now + 0.4);
-            }
-            else if (type === 'SHOOT_PISTOL') {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(300, now);
-                osc.frequency.exponentialRampToValueAtTime(40, now + 0.1);
-                gain.gain.setValueAtTime(0.6, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-                osc.connect(gain); gain.connect(audioCtx.destination);
-                osc.start(now); osc.stop(now + 0.1);
-            }
-            else if (type === 'RELOAD') {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(600, now);
-                osc.frequency.linearRampToValueAtTime(800, now + 0.1);
-                osc.frequency.linearRampToValueAtTime(400, now + 0.25);
-                gain.gain.setValueAtTime(0.3, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
-                osc.connect(gain); gain.connect(audioCtx.destination);
-                osc.start(now); osc.stop(now + 0.25);
-            }
-            else if (type === 'SCOPE') {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(1200, now);
-                osc.frequency.exponentialRampToValueAtTime(400, now + 0.08);
-                gain.gain.setValueAtTime(0.2, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-                osc.connect(gain); gain.connect(audioCtx.destination);
-                osc.start(now); osc.stop(now + 0.08);
-            }
-            else if (type === 'HIT_KILL') {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(880, now);
-                osc.frequency.setValueAtTime(1760, now + 0.08);
-                gain.gain.setValueAtTime(0.4, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
-                osc.connect(gain); gain.connect(audioCtx.destination);
-                osc.start(now); osc.stop(now + 0.2);
-            }
-            else if (type === 'EXPLOSION') {
-                const bufferSize = audioCtx.sampleRate * 0.8;
-                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-                const data = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-
-                const noise = audioCtx.createBufferSource();
-                noise.buffer = buffer;
-                const gain = audioCtx.createGain();
-                gain.gain.setValueAtTime(1.0, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
-                noise.connect(gain); gain.connect(audioCtx.destination);
-                noise.start(now);
-            }
-        }
-
-        let currentLang = 'GE';
-        const TRANSLATIONS = {
-            GE: { matchmaking: '🎮 CS LITE REALISTIC 3D WEAPONS & AUDIO', host: '🌐 ოთახის შექმნა (Host Code)', bot: '🤖 3D ბოტებთან თამაში', friends: '👥 მეგობრების სია / შეერთება', add: 'შეერთება', shop: '📦 CS 3D GLB მოდელების არსენალი', equip: 'არჩევა', equipped: '✓ არჩეულია', locked: '🔒 ჩაკეტილია', buy: 'ყიდვა' },
-            EN: { matchmaking: '🎮 CS LITE REALISTIC 3D WEAPONS & AUDIO', host: '🌐 CREATE ROOM (Host Code)', bot: '🤖 PLAY VS 3D BOTS', friends: '👥 FRIENDS LIST / JOIN', add: 'JOIN', shop: '📦 CS 3D GLB MODELS ARSENAL', equip: 'EQUIP', equipped: '✓ EQUIPPED', locked: 'LOCKED', buy: 'BUY' }
-        };
-
-        function toggleLanguage() {
-            currentLang = currentLang === 'GE' ? 'EN' : 'GE';
-            document.getElementById('lang-label').innerText = currentLang;
-            const t = TRANSLATIONS[currentLang];
-            document.getElementById('txt-matchmaking').innerText = t.matchmaking;
-            document.getElementById('btn-host').innerText = t.host;
-            document.getElementById('btn-bot').innerText = t.bot;
-            document.getElementById('txt-friends').innerText = t.friends;
-            document.getElementById('btn-add-friend').innerText = t.add;
-            document.getElementById('txt-shop').innerText = t.shop;
-            updateLobbyUI();
-        }
-
-        // 3D GLB Models Arsenal
-        const WEAPONS_CATALOG = [
-            { id: 1, name: 'AK-47 Kalashnikov', type: 'AK47', modelFile: 'ak47.glb', soundType: 'SHOOT_AK47', slot: 1, damage: 36, clip: 30, reserve: 90, color: '#ff9900' },
-            { id: 2, name: 'M4A4 Howl Rifle', type: 'M4A4', modelFile: 'm4a4.glb', soundType: 'SHOOT_M4A4', slot: 1, damage: 33, clip: 30, reserve: 90, color: '#ff5500' },
-            { id: 3, name: 'AWP Dragon Lore Sniper', type: 'AWP', modelFile: 'awp.glb', soundType: 'SHOOT_AWP', slot: 1, damage: 110, clip: 10, reserve: 40, color: '#ff00ff', hasScope: true },
-            { id: 4, name: 'Glock-18 Pistol', type: 'GLOCK', modelFile: 'glock.glb', soundType: 'SHOOT_PISTOL', slot: 2, damage: 24, clip: 20, reserve: 120, color: '#00f0ff' },
-            { id: 5, name: 'Desert Eagle Blaze', type: 'DEAGLE', modelFile: 'deagle.glb', soundType: 'SHOOT_PISTOL', slot: 2, damage: 54, clip: 7, reserve: 35, color: '#ffd700' },
-            { id: 6, name: 'Karambit Doppler Knife', type: 'KNIFE', modelFile: 'knife.glb', soundType: 'SHOOT_PISTOL', slot: 3, damage: 85, clip: 1, reserve: 1, color: '#ff0055' }
-        ];
-
-        let selectedMode = '1v1';
-        function selectMode(m) {
-            selectedMode = m;
-            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-            if(m==='1v1') document.getElementById('m1').classList.add('active');
-            if(m==='2v2') document.getElementById('m2').classList.add('active');
-            if(m==='3v3') document.getElementById('m3').classList.add('active');
-            if(m==='4v4') document.getElementById('m4').classList.add('active');
-        }
-
-        let player = JSON.parse(localStorage.getItem('cs_player_data')) || {
-            coins: 800, level: 1, wins: 0,
-            equipped: { 1: 1, 2: 4, 3: 6 },
-            friends: []
-        };
-
-        function savePlayerData() {
-            localStorage.setItem('cs_player_data', JSON.stringify(player));
-            updateLobbyUI();
-        }
-
-        const LOBBY_ROOM_ID = "cs_lite_global_public_match";
-        let peer = new Peer();
-        let conn = null;
-
-        peer.on('open', id => {
-            document.getElementById('player-id-display').innerText = id;
-        });
-
-        peer.on('connection', c => {
-            conn = c;
-            setupNetworkListeners();
-            initGame(true, false);
-        });
-
-        function startInstantOnlineMatch() {
-            initAudioContext();
-            conn = peer.connect(LOBBY_ROOM_ID);
-            
-            let connected = false;
-            conn.on('open', () => {
-                connected = true;
-                setupNetworkListeners();
-                initGame(false, false);
-            });
-
-            setTimeout(() => {
-                if (!connected) {
-                    peer.destroy();
-                    peer = new Peer(LOBBY_ROOM_ID);
-                    peer.on('open', () => {
-                        alert("🌐 ონლაინ ოთახი შეიქმნა! ელოდებით მეორე მოთამაშის შემოერთებას...");
-                    });
-                    peer.on('connection', c => {
-                        conn = c;
-                        setupNetworkListeners();
-                        initGame(true, false);
-                    });
-                    peer.on('error', () => {
-                        startBotMatch();
-                    });
-                }
-            }, 1500);
-        }
-
-        function connectToFriendFromInput() {
-            initAudioContext();
-            const fId = document.getElementById('friend-id-input').value.trim();
-            if (fId) connectToFriend(fId);
-        }
-
-        function startMatchHost() {
-            initAudioContext();
-            alert(`🌐 ოთახი შეიქმნა! თქვენი ID არის:\n${peer.id}\n\nგაუზიარეთ მეგობარს ეს ID შესაერთებლად!`);
-            initGame(true, false);
-        }
-
-        function startBotMatch() { initAudioContext(); initGame(true, true); }
-        function connectToFriend(fId) { initAudioContext(); conn = peer.connect(fId); setupNetworkListeners(); initGame(false, false); }
-
-        function setupNetworkListeners() {
-            conn.on('data', data => {
-                if (data.type === 'GAME_STATE') {
-                    remotePlayerState = data.player;
-                } else if (data.type === 'SHOOT') {
-                    playSoundEffect('SHOOT_AK47');
-                }
-            });
-        }
-
-        function updateLobbyUI() {
-            document.getElementById('coins-display').innerText = player.coins;
-            document.getElementById('lvl-display').innerText = player.level;
-            document.getElementById('wins-display').innerText = player.wins || 0;
-            const t = TRANSLATIONS[currentLang];
-
-            const fList = document.getElementById('friends-list');
-            fList.innerHTML = '';
-            player.friends.forEach(fId => {
-                fList.innerHTML += `<div class="friend-item"><span>${fId.substring(0, 10)}...</span><button class="btn-sec" style="padding:4px 8px; font-size:0.75rem;" onclick="connectToFriend('${fId}')">Join</button></div>`;
-            });
-
-            const shop = document.getElementById('weapon-shop-container');
-            shop.innerHTML = '';
-            WEAPONS_CATALOG.forEach(w => {
-                const isEquipped = player.equipped[w.slot] === w.id;
-
-                shop.innerHTML += `
-                    <div class="weapon-card ${isEquipped ? 'equipped' : ''}">
-                        <div class="weapon-3d-tag">3D GLB MODEL</div>
-                        <div class="weapon-model-preview">
-                            <div style="font-size:1.6rem;">📦 3D</div>
-                            <div class="model-file-badge">${w.modelFile}</div>
-                        </div>
-                        <div style="font-weight:800; color:${w.color}; font-size:1rem; margin-bottom:2px;">${w.name}</div>
-                        <div style="font-size:0.8rem; color:#aaa; margin-bottom:6px;">Damage: ${w.damage} | Clip: ${w.clip}</div>
-                        <button onclick="equipWeapon(${w.id}, ${w.slot})" style="width:100%; padding:8px; font-size:0.85rem;">${isEquipped ? t.equipped : t.equip}</button>
-                    </div>`;
-            });
-        }
-
-        function equipWeapon(wId, slot) { player.equipped[slot] = wId; savePlayerData(); }
-
-        let scene, camera, renderer;
-        let gameState = 'LOBBY';
-
-        let viewmodelGroup, current3DWeaponMesh = null, rightArm;
-        let localPlayerMesh, remoteMesh;
-        let activeGrenades = [];
-        let activeSlot = 1, kills = 0, isBotMatch = false;
-
-        let isScoped = false;
-
-        let matchTimer = 300;
-        let timerInterval = null;
-        const TARGET_KILLS = 40;
-
-        let cameraMode = 'FPP';
-        let isTouch = 'ontouchstart' in window;
-        let joyDir = { forward: 0, right: 0 };
-
-        let localState = { 
-            x: 0, posY: 0, velY: 0, z: 25, hp: 100, rotY: 0, pitchX: 0,
-            isJumping: false, isCrouching: false,
-            clip: 30, reserve: 90
-        };
-        let remotePlayerState = { x: 0, posY: 0, z: -25, hp: 100, rotY: 0 };
-
-        let keys = {};
-        let isPointerLocked = false;
-        const gltfLoader = new THREE.GLTFLoader();
-
-        // Smart GLB loader that tries .glb, then .glb.glb
-        function loadGLBSmart(filename, onSuccess, onError) {
-            let altFilename = filename.endsWith('.glb') ? filename + '.glb' : filename;
-            if (filename.endsWith('.glb.glb')) altFilename = filename.replace('.glb.glb', '.glb');
-
-            gltfLoader.load(filename, (gltf) => {
-                onSuccess(gltf);
-            }, undefined, (err1) => {
-                gltfLoader.load(altFilename, (gltf2) => {
-                    onSuccess(gltf2);
-                }, undefined, (err2) => {
-                    if (onError) onError(err2);
-                });
-            });
-        }
-
-        function toggleCameraView() {
-            cameraMode = cameraMode === 'TPP' ? 'FPP' : 'TPP';
-            document.getElementById('cam-mode-val').innerText = `${cameraMode} (V)`;
-        }
-
-        function triggerMobileJump() {
-            if (!localState.isJumping && !localState.isCrouching) {
-                localState.velY = 0.26;
-                localState.isJumping = true;
-            }
-        }
-
-        function toggleMobileCrouch() {
-            localState.isCrouching = !localState.isCrouching;
-        }
-
-        function toggleScopeZoom() {
-            if (gameState !== 'PLAYING') return;
-            isScoped = !isScoped;
-            playSoundEffect('SCOPE');
-            
-            const scopeOverlay = document.getElementById('sniper-scope-overlay');
-            const crosshair = document.getElementById('crosshair');
-
-            if (isScoped) {
-                camera.fov = 20;
-                scopeOverlay.style.display = 'block';
-                crosshair.style.display = 'none';
-                if (viewmodelGroup) viewmodelGroup.visible = false;
-            } else {
-                camera.fov = 65;
-                scopeOverlay.style.display = 'none';
-                crosshair.style.display = 'block';
-                if (viewmodelGroup && cameraMode === 'FPP') viewmodelGroup.visible = true;
-            }
-            camera.updateProjectionMatrix();
-        }
-
-        function setupJoystick() {
-            const joyContainer = document.getElementById('move-joy');
-            const joyKnob = document.getElementById('joy-knob');
-            let joyTouchId = null;
-            let startX = 0, startY = 0;
-
-            joyContainer.addEventListener('touchstart', e => {
-                const touch = e.changedTouches;
-                joyTouchId = touch.identifier;
-                const rect = joyContainer.getBoundingClientRect();
-                startX = rect.left + rect.width / 2;
-                startY = rect.top + rect.height / 2;
-            }, { passive: true });
-
-            window.addEventListener('touchmove', e => {
-                if (joyTouchId === null) return;
-                for (let touch of e.changedTouches) {
-                    if (touch.identifier === joyTouchId) {
-                        let dx = touch.clientX - startX;
-                        let dy = touch.clientY - startY;
-                        let dist = Math.hypot(dx, dy);
-                        let maxRadius = 38;
-
-                        if (dist > maxRadius) {
-                            dx = (dx / dist) * maxRadius;
-                            dy = (dy / dist) * maxRadius;
-                        }
-
-                        joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
-                        joyDir.right = dx / maxRadius;
-                        joyDir.forward = -dy / maxRadius;
-                    }
-                }
-            }, { passive: true });
-
-            const resetJoy = e => {
-                for (let touch of e.changedTouches) {
-                    if (touch.identifier === joyTouchId) {
-                        joyTouchId = null;
-                        joyKnob.style.transform = 'translate(0px, 0px)';
-                        joyDir.forward = 0;
-                        joyDir.right = 0;
-                    }
-                }
-            };
-
-            window.addEventListener('touchend', resetJoy);
-            window.addEventListener('touchcancel', resetJoy);
-        }
-
-        function initEngine3D() {
-            const canvas = document.getElementById('canvas3D');
-            
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xdce8f5);
-            scene.fog = new THREE.FogExp2(0xdce8f5, 0.005);
-
-            camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
-            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: "high-performance" });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-            const ambientLight = new THREE.AmbientLight(0xfff5e6, 0.9);
-            scene.add(ambientLight);
-
-            const sunLight = new THREE.DirectionalLight(0xfff0dd, 1.5);
-            sunLight.position.set(40, 80, 20);
-            sunLight.castShadow = true;
-            sunLight.shadow.mapSize.width = 2048; sunLight.shadow.mapSize.height = 2048;
-            scene.add(sunLight);
-
-            setupJoystick();
-
-            canvas.addEventListener('click', (e) => {
-                initAudioContext();
-                if (gameState === 'PLAYING') canvas.requestPointerLock();
-            });
-
-            canvas.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                toggleScopeZoom();
-            });
-
-            document.addEventListener('pointerlockchange', () => {
-                isPointerLocked = (document.pointerLockElement === canvas);
-            });
-
-            document.addEventListener('mousemove', e => {
-                if (isPointerLocked && gameState === 'PLAYING') {
-                    const sens = isScoped ? 0.0008 : 0.0022;
-                    localState.rotY -= e.movementX * sens;
-                    localState.pitchX -= e.movementY * sens;
-                    localState.pitchX = Math.max(-1.4, Math.min(1.4, localState.pitchX));
-                }
-            });
-
-            window.addEventListener('resize', onWindowResize);
-            requestAnimationFrame(mainRenderLoop);
-        }
-
-        function createSandstoneTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 512; canvas.height = 512;
-            const ctx = canvas.getContext('2d');
-            
-            ctx.fillStyle = '#d8bd8e'; ctx.fillRect(0, 0, 512, 512);
-            for(let i=0; i<3000; i++) {
-                ctx.fillStyle = Math.random() > 0.5 ? 'rgba(180,140,90,0.15)' : 'rgba(255,240,210,0.2)';
-                ctx.fillRect(Math.random()*512, Math.random()*512, Math.random()*4+1, Math.random()*4+1);
-            }
-            ctx.strokeStyle = 'rgba(120,90,50,0.25)'; ctx.lineWidth = 3;
-            for(let y=0; y<512; y+=64) {
-                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(512, y); ctx.stroke();
-            }
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
-            return texture;
-        }
-
-        function createCSLiteHazardCrateTexture() {
-            const canvas = document.createElement('canvas');
-            canvas.width = 512; canvas.height = 512;
-            const ctx = canvas.getContext('2d');
-            
-            ctx.fillStyle = '#b3824d'; ctx.fillRect(0, 0, 512, 512);
-            ctx.fillStyle = '#7a542a';
-            ctx.fillRect(0, 0, 512, 32); ctx.fillRect(0, 480, 512, 32);
-            ctx.fillRect(0, 0, 32, 512); ctx.fillRect(480, 0, 32, 512);
-
-            ctx.fillStyle = '#ffd700'; ctx.fillRect(32, 32, 448, 50);
-            ctx.fillStyle = '#111';
-            for (let x = 32; x < 480; x += 40) {
-                ctx.beginPath();
-                ctx.moveTo(x, 32); ctx.lineTo(x + 20, 32);
-                ctx.lineTo(x + 5, 82); ctx.lineTo(x - 15, 82);
-                ctx.fill();
-            }
-
-            ctx.strokeStyle = '#4a3014'; ctx.lineWidth = 6;
-            ctx.beginPath(); ctx.moveTo(32, 32); ctx.lineTo(480, 480); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(480, 32); ctx.lineTo(32, 480); ctx.stroke();
-
-            return new THREE.CanvasTexture(canvas);
-        }
-
-        function load3DWeaponMesh(weaponObj) {
-            if (current3DWeaponMesh) {
-                viewmodelGroup.remove(current3DWeaponMesh);
-                current3DWeaponMesh = null;
-            }
-
-            loadGLBSmart(weaponObj.modelFile, (gltf) => {
-                current3DWeaponMesh = gltf.scene;
-                current3DWeaponMesh.scale.set(0.5, 0.5, 0.5);
-                current3DWeaponMesh.position.set(0.24, -0.2, -0.65);
-                viewmodelGroup.add(current3DWeaponMesh);
-            }, (err) => {
-                const meshGroup = new THREE.Group();
-                const mat = new THREE.MeshStandardMaterial({ color: 0x1a1d22, metalness: 0.8, roughness: 0.2 });
-                const slide = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.6), mat);
-                slide.position.set(0.24, -0.12, -0.75); meshGroup.add(slide);
-                const grip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.3, 0.18), mat);
-                grip.rotation.x = -0.2; grip.position.set(0.24, -0.28, -0.62); meshGroup.add(grip);
-                
-                current3DWeaponMesh = meshGroup;
-                viewmodelGroup.add(current3DWeaponMesh);
-            });
-        }
-
-        function createFPSViewmodel() {
-            viewmodelGroup = new THREE.Group();
-
-            const gloveMat = new THREE.MeshStandardMaterial({ color: 0x1d2128, roughness: 0.5, metalness: 0.1 });
-            const armMat = new THREE.MeshStandardMaterial({ color: 0x2b3028, roughness: 0.7 });
-
-            rightArm = new THREE.Group();
-            const rSleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.8, 12), armMat);
-            rSleeve.rotation.x = Math.PI / 3; rSleeve.position.set(0.32, -0.28, -0.4);
-            rightArm.add(rSleeve);
-
-            const rGlove = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.32), gloveMat);
-            rGlove.position.set(0.26, -0.2, -0.65);
-            rightArm.add(rGlove);
-
-            viewmodelGroup.add(rightArm);
-
-            const activeWepId = player.equipped[activeSlot];
-            const activeWep = WEAPONS_CATALOG.find(w => w.id === activeWepId) || WEAPONS_CATALOG;
-            load3DWeaponMesh(activeWep);
-
-            camera.add(viewmodelGroup);
-            scene.add(camera);
-        }
-
-        function switchWeaponSlot(slot) {
-            if (isScoped) toggleScopeZoom();
-            activeSlot = slot;
-            document.querySelectorAll('.weapon-slot-btn').forEach((b, i) => {
-                if (i + 1 === slot) b.classList.add('active'); else b.classList.remove('active');
-            });
-
-            const wepId = player.equipped[slot];
-            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG;
-            localState.clip = wep.clip; localState.reserve = wep.reserve;
-            document.getElementById('ammo-clip').innerText = localState.clip;
-            document.getElementById('ammo-reserve').innerText = localState.reserve;
-
-            load3DWeaponMesh(wep);
-        }
-
-        function createCSGOTDMArena() {
-            loadGLBSmart('dust2.glb', (gltf) => {
-                const mapScene = gltf.scene;
-                mapScene.scale.set(1, 1, 1);
-                scene.add(mapScene);
-            }, () => {
-                const sandTex = createSandstoneTexture();
-                sandTex.repeat.set(24, 24);
-                const floorMat = new THREE.MeshStandardMaterial({ map: sandTex, roughness: 0.85 });
-                const floor = new THREE.Mesh(new THREE.PlaneGeometry(180, 180), floorMat);
-                floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
-                scene.add(floor);
-
-                const sprayGeo = new THREE.CircleGeometry(4, 32);
-                const sprayMat = new THREE.MeshBasicMaterial({ color: 0xcc0022, transparent: true, opacity: 0.85 });
-                const spray = new THREE.Mesh(sprayGeo, sprayMat);
-                spray.rotation.x = -Math.PI / 2; spray.position.set(-6, 0.02, 2);
-                scene.add(spray);
-
-                const wallTex = createSandstoneTexture();
-                wallTex.repeat.set(12, 1);
-                const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.8 });
-
-                const nWall = new THREE.Mesh(new THREE.BoxGeometry(180, 18, 3), wallMat);
-                nWall.position.set(0, 9, -90); scene.add(nWall);
-                const sWall = new THREE.Mesh(new THREE.BoxGeometry(180, 18, 3), wallMat);
-                sWall.position.set(0, 9, 90); scene.add(sWall);
-                const wWall = new THREE.Mesh(new THREE.BoxGeometry(3, 18, 180), wallMat);
-                wWall.position.set(-90, 9, 0); scene.add(wWall);
-                const eWall = new THREE.Mesh(new THREE.BoxGeometry(3, 18, 180), wallMat);
-                eWall.position.set(90, 9, 0); scene.add(eWall);
-
-                const platMat = new THREE.MeshStandardMaterial({ map: sandTex, roughness: 0.8 });
-                const plat = new THREE.Mesh(new THREE.BoxGeometry(40, 6, 35), platMat);
-                plat.position.set(-45, 3, -40); plat.receiveShadow = true; plat.castShadow = true;
-                scene.add(plat);
-
-                const stairMat = new THREE.MeshStandardMaterial({ map: sandTex, roughness: 0.75 });
-                for (let i = 0; i < 12; i++) {
-                    const step = new THREE.Mesh(new THREE.BoxGeometry(12, 0.5, 1.2), stairMat);
-                    step.position.set(-45, 0.25 + i * 0.5, -20.5 + i * 1.2);
-                    step.receiveShadow = true; step.castShadow = true;
-                    scene.add(step);
-                }
-
-                const CrateMat = new THREE.MeshStandardMaterial({ map: createCSLiteHazardCrateTexture(), roughness: 0.6 });
-                const palletMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.5 });
-
-                function addCSLiteCrate(x, y, z, size) {
-                    const group = new THREE.Group();
-                    const crate = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), CrateMat);
-                    crate.position.y = size / 2 + 0.3; crate.castShadow = true; crate.receiveShadow = true;
-                    group.add(crate);
-                    const pallet = new THREE.Mesh(new THREE.BoxGeometry(size + 0.4, 0.3, size + 0.4), palletMat);
-                    pallet.position.y = 0.15; group.add(pallet);
-                    group.position.set(x, y, z);
-                    scene.add(group);
-                }
-
-                addCSLiteCrate(0, 0, -5, 5);
-                addCSLiteCrate(-12, 0, -18, 4.5);
-                addCSLiteCrate(15, 0, 12, 5);
-                addCSLiteCrate(20, 0, -10, 4);
-                addCSLiteCrate(-45, 6, -40, 4);
-            });
-        }
-
-        function createCSGOSoldierMesh(teamType) {
-            const group = new THREE.Group();
-            const primaryModel = teamType === 'CT' ? 'ct.glb' : 't.glb';
-
-            loadGLBSmart(primaryModel, (gltf) => {
-                const model = gltf.scene;
-                model.scale.set(0.018, 0.018, 0.018);
-                model.position.y = 0;
-                model.traverse(c => { if(c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
-                group.add(model);
-            }, () => {
-                loadGLBSmart('player.glb', (gltf2) => {
-                    const model2 = gltf2.scene;
-                    model2.scale.set(0.018, 0.018, 0.018);
-                    model2.position.y = 0;
-                    model2.traverse(c => { if(c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
-                    group.add(model2);
-                }, () => {
-                    const mainColor = teamType === 'CT' ? 0x1b2845 : 0x3d3522;
-
-                    const bodyMat = new THREE.MeshStandardMaterial({ color: mainColor, roughness: 0.5, metalness: 0.2 });
-                    const vestMat = new THREE.MeshStandardMaterial({ color: 0x11141a, roughness: 0.4 });
-
-                    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.5, 1.6, 12), bodyMat);
-                    body.position.y = 2.0; body.castShadow = true; group.add(body);
-
-                    const vest = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.58, 1.1, 12), vestMat);
-                    vest.position.y = 2.1; group.add(vest);
-
-                    const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), new THREE.MeshStandardMaterial({ color: 0x151820 }));
-                    head.position.y = 3.1; group.add(head);
-
-                    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 16, 0, Math.PI * 2, 0, Math.PI / 1.7), bodyMat);
-                    helmet.position.y = 3.15; group.add(helmet);
-
-                    const goggleGeo = new THREE.BoxGeometry(0.55, 0.18, 0.2);
-                    const goggleMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff, roughness: 0.1, metalness: 0.9, emissive: 0x00f0ff, emissiveIntensity: 0.2 });
-                    const goggles = new THREE.Mesh(goggleGeo, goggleMat);
-                    goggles.position.set(0, 3.15, 0.38); group.add(goggles);
-                });
-            });
-
-            return group;
-        }
-
-        function initGame(isHost, botMatch) {
-            isBotMatch = botMatch;
-            gameState = 'PLAYING';
-            kills = 0;
-            matchTimer = 300;
-
-            document.getElementById('lobby').classList.add('hidden');
-            document.getElementById('game-screen').classList.remove('hidden');
-            if (isTouch) document.getElementById('touch-controls').style.display = 'block';
-
-            createCSGOTDMArena();
-            createFPSViewmodel();
-
-            localPlayerMesh = createCSGOSoldierMesh('CT');
-            scene.add(localPlayerMesh);
-
-            remoteMesh = createCSGOSoldierMesh('T');
-            scene.add(remoteMesh);
-
-            localState.x = 0; localState.z = 25; localState.posY = 0;
-            localState.hp = 100;
-
-            if (timerInterval) clearInterval(timerInterval);
-            timerInterval = setInterval(() => {
-                if (gameState === 'PLAYING') {
-                    matchTimer--;
-                    const mins = String(Math.floor(matchTimer / 60)).padStart(2, '0');
-                    const secs = String(Math.floor(matchTimer % 60)).padStart(2, '0');
-                    document.getElementById('timer-val').innerText = `${mins}:${secs}`;
-
-                    if (matchTimer <= 0) { clearInterval(timerInterval); endGame(kills >= 20); }
-                }
-            }, 1000);
-
-            window.addEventListener('keydown', e => {
-                const k = e.key.toLowerCase();
-                keys[k] = true;
-                if (e.code === 'Space') keys['space'] = true;
-                if (k === '1') switchWeaponSlot(1);
-                if (k === '2') switchWeaponSlot(2);
-                if (k === '3') switchWeaponSlot(3);
-                if (k === 'v' || k === 'ვ') toggleCameraView();
-                if (k === 'q' || k === 'ქ') toggleScopeZoom();
-                if (k === 'g' || k === 'გ') throwGrenade('HE');
-                if (k === 'x' || k === 'ხ') throwGrenade('SMOKE');
-                if (k === 'r' || k === 'რ') reloadGun();
-            });
-            window.addEventListener('keyup', e => {
-                const k = e.key.toLowerCase();
-                keys[k] = false;
-                if (e.code === 'Space') keys['space'] = false;
-            });
-            window.addEventListener('mousedown', (e) => {
-                if (e.button === 0) shoot3D();
-                if (e.button === 2) toggleScopeZoom();
-            });
-        }
-
-        function reloadGun() {
-            const wepId = player.equipped[activeSlot];
-            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG;
-            if (localState.clip < wep.clip && localState.reserve > 0) {
-                playSoundEffect('RELOAD');
-                const needed = wep.clip - localState.clip;
-                const toAdd = Math.min(needed, localState.reserve);
-                localState.clip += toAdd;
-                localState.reserve -= toAdd;
-                document.getElementById('ammo-clip').innerText = localState.clip;
-                document.getElementById('ammo-reserve').innerText = localState.reserve;
-            }
-        }
-
-        function addKillFeedMsg(msg) {
-            const kf = document.getElementById('killfeed');
-            const div = document.createElement('div');
-            div.className = 'kill-msg'; div.innerText = msg;
-            kf.appendChild(div);
-            setTimeout(() => div.remove(), 4000);
-        }
-
-        function throwGrenade(type) {
-            if (gameState !== 'PLAYING') return;
-            const nadeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.3, 10), new THREE.MeshStandardMaterial({ color: 0x335522 }));
-            nadeMesh.position.set(localState.x, localState.posY + 1.8, localState.z);
-
-            const forward = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(localState.pitchX, localState.rotY, 0, 'YXZ'));
-            const vel = forward.multiplyScalar(0.8); vel.y = 0.3;
-
-            nadeMesh.userData = { type: type, vel: vel, timer: 90 };
-            scene.add(nadeMesh); activeGrenades.push(nadeMesh);
-        }
-
-        function shoot3D() {
-            if (gameState !== 'PLAYING' || localState.clip <= 0) return;
-
-            localState.clip--;
-            document.getElementById('ammo-clip').innerText = localState.clip;
-
-            const wepId = player.equipped[activeSlot];
-            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG;
-
-            // PLAY SOUND EFFECT
-            playSoundEffect(wep.soundType || 'SHOOT_AK47');
-
-            if (current3DWeaponMesh && !isScoped) {
-                current3DWeaponMesh.position.z += 0.08;
-                setTimeout(() => { if (current3DWeaponMesh) current3DWeaponMesh.position.z -= 0.08; }, 60);
-            }
-
-            const raycaster = new THREE.Raycaster();
-            const rayDir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(localState.pitchX, localState.rotY, 0, 'YXZ'));
-            raycaster.set(camera.position, rayDir);
-
-            const intersects = raycaster.intersectObject(remoteMesh, true);
-            if (intersects.length > 0) {
-                playSoundEffect('HIT_KILL');
-                remotePlayerState.hp -= wep.damage;
-                if (remotePlayerState.hp <= 0) {
-                    kills++;
-                    document.getElementById('ct-score-val').innerText = kills;
-                    addKillFeedMsg(`Player 🔫 Bot Max (${wep.name})`);
-                    remotePlayerState.hp = 100;
-                    remotePlayerState.x = (Math.random() - 0.5) * 50;
-                    remotePlayerState.z = (Math.random() - 0.5) * 50;
-                    if (kills >= TARGET_KILLS) endGame(true);
-                }
-            }
-
-            if (conn && !isBotMatch) {
-                conn.send({ type: 'SHOOT', x: localState.x, y: localState.posY, z: localState.z });
-            }
-        }
-
-        function mainRenderLoop() {
-            if (gameState === 'PLAYING') {
-                
-                localState.isCrouching = keys['c'] || keys['ჩ'];
-                let speed = localState.isCrouching ? 0.09 : (isScoped ? 0.08 : 0.18);
-
-                if ((keys['space'] || keys[' ']) && !localState.isJumping) {
-                    localState.velY = 0.25; localState.isJumping = true;
-                }
-
-                let targetY = 0;
-                if (localState.x >= -65 && localState.x <= -25 && localState.z >= -57.5 && localState.z <= -22.5) {
-                    targetY = 6;
-                }
-                if (localState.x >= -51 && localState.x <= -39 && localState.z >= -21 && localState.z <= -6) {
-                    let progress = (localState.z - (-21)) / (-6 - (-21));
-                    targetY = Math.max(0, Math.min(6, progress * 6));
-                }
-
-                if (localState.isJumping) {
-                    localState.posY += localState.velY; localState.velY -= 0.014;
-                    if (localState.posY <= targetY) { localState.posY = targetY; localState.velY = 0; localState.isJumping = false; }
-                } else {
-                    localState.posY = targetY;
-                }
-
-                const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), localState.rotY);
-                const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), localState.rotY);
-
-                if (keys['w'] || keys['წ']) { localState.x += forward.x * speed; localState.z += forward.z * speed; }
-                if (keys['s'] || keys['ს']) { localState.x -= forward.x * speed; localState.z -= forward.z * speed; }
-                if (keys['a'] || keys['ა']) { localState.x -= right.x * speed; localState.z -= right.z * speed; }
-                if (keys['d'] || keys['დ']) { localState.x += right.x * speed; localState.z += right.z * speed; }
-
-                if (joyDir.forward !== 0 || joyDir.right !== 0) {
-                    localState.x += (forward.x * joyDir.forward + right.x * joyDir.right) * speed;
-                    localState.z += (forward.z * joyDir.forward + right.z * joyDir.right) * speed;
-                }
-
-                localState.x = Math.max(-87, Math.min(87, localState.x));
-                localState.z = Math.max(-87, Math.min(87, localState.z));
-
-                if (localPlayerMesh) {
-                    localPlayerMesh.position.set(localState.x, localState.posY, localState.z);
-                    localPlayerMesh.rotation.y = localState.rotY;
-                    localPlayerMesh.scale.y = localState.isCrouching ? 0.6 : 1.0;
-                }
-
-                if (cameraMode === 'FPP') {
-                    const camY = localState.posY + (localState.isCrouching ? 1.4 : 2.7);
-                    camera.position.set(localState.x, camY, localState.z);
-                    camera.rotation.set(localState.pitchX, localState.rotY, 0, 'YXZ');
-                    if (viewmodelGroup && !isScoped) viewmodelGroup.visible = true;
-                    if (localPlayerMesh) localPlayerMesh.visible = false;
-                } else {
-                    const distBehind = 6.5;
-                    const camX = localState.x - forward.x * distBehind;
-                    const camZ = localState.z - forward.z * distBehind;
-                    const camY = localState.posY + (localState.isCrouching ? 2.5 : 3.8);
-
-                    camera.position.set(camX, camY, camZ);
-                    camera.lookAt(localState.x + forward.x * 2, localState.posY + (localState.isCrouching ? 1.2 : 2.2), localState.z + forward.z * 2);
-
-                    if (viewmodelGroup) viewmodelGroup.visible = false;
-                    if (localPlayerMesh) localPlayerMesh.visible = true;
-                }
-
-                if (isBotMatch) {
-                    let dx = localState.x - remotePlayerState.x;
-                    let dz = localState.z - remotePlayerState.z;
-                    let dist = Math.hypot(dx, dz);
-                    remotePlayerState.rotY = Math.atan2(dx, dz);
-
-                    if (dist > 6) {
-                        remotePlayerState.x += Math.sin(remotePlayerState.rotY) * 0.07;
-                        remotePlayerState.z += Math.cos(remotePlayerState.rotY) * 0.07;
-                    }
-                }
-
-                remoteMesh.position.set(remotePlayerState.x, remotePlayerState.posY, remotePlayerState.z);
-                remoteMesh.rotation.y = remotePlayerState.rotY;
-
-                if (conn && !isBotMatch) {
-                    conn.send({ type: 'GAME_STATE', player: localState });
-                }
-
-                activeGrenades.forEach((nade, idx) => {
-                    nade.position.add(nade.userData.vel); nade.userData.vel.y -= 0.015; nade.userData.timer--;
-                    if (nade.position.y <= 0.2 || nade.userData.timer <= 0) {
-                        playSoundEffect('EXPLOSION');
-                        scene.remove(nade); activeGrenades.splice(idx, 1);
-                    }
-                });
-
-                document.getElementById('hp-val').innerText = Math.max(0, localState.hp);
-                document.getElementById('hp-bar-fill').style.width = `${localState.hp}%`;
-            }
-
-            renderer.render(scene, camera);
-            requestAnimationFrame(mainRenderLoop);
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        function endGame(won) {
-            if (timerInterval) clearInterval(timerInterval);
-            player.coins += kills * 10 + (won ? 150 : 0);
-            savePlayerData();
-            alert(`${won ? '🏆 CS LITE WIN!' : '☠️ DEFEAT!'}\n🎯 Kills: ${kills}/${TARGET_KILLS}`);
-            location.reload();
-        }
-
-        updateLobbyUI();
-        initEngine3D();
-    </script>
+    <div id="killfeed"></div>
+    <div id="crosshair"></div>
+    <div id="sniper-scope-overlay"></div>
+    <div class="cs-money">$<span id="money-val">800</span></div>
+    <div class="cs-hp-container"><span id="hp-val">100</span><div class="hp-bar-bg"><div id="hp-bar-fill" class="hp-bar-fill"></div></div></div>
+    <div class="weapon-bar-hud">
+      <div class="weapon-slot-btn active" id="slot-btn-1" onclick="switchWeaponSlot(1)">1: PRIMARY</div>
+      <div class="weapon-slot-btn" id="slot-btn-2" onclick="switchWeaponSlot(2)">2: PISTOL</div>
+      <div class="weapon-slot-btn" id="slot-btn-3" onclick="switchWeaponSlot(3)">3: KNIFE</div>
+    </div>
+    <div class="cs-ammo"><span id="ammo-clip">30</span> / <span id="ammo-reserve">90</span> 🔫</div>
+  </div>
+  <div id="touch-controls">
+    <div id="move-joy" class="joystick-container"><div id="joy-knob" class="joystick-knob"></div></div>
+    <div class="fire-mob-btn" onclick="shoot3D()">🔫</div>
+    <div class="scope-mob-btn" onclick="toggleScopeZoom()">🔭</div>
+    <div class="mobile-action-btns">
+      <div class="mob-action-btn" onclick="triggerMobileJump()"><span>⬆️</span><span style="font-size:.55rem">JUMP</span></div>
+      <div class="mob-action-btn" onclick="toggleMobileCrouch()"><span>⬇️</span><span style="font-size:.55rem">CROUCH</span></div>
+      <div class="mob-action-btn" onclick="throwGrenade('HE')"><span>💣</span><span style="font-size:.55rem">NADE</span></div>
+      <div class="mob-action-btn" onclick="throwGrenade('SMOKE')"><span>💨</span><span style="font-size:.55rem">SMOKE</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ================= AUDIO =================
+let audioCtx = null;
+function initAudioContext(){
+  if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended') audioCtx.resume();
+}
+function tone(type,f0,f1,dur,vol){
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain(), t=audioCtx.currentTime;
+  o.type=type; o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(f1,t+dur);
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.01,t+dur);
+  o.connect(g); g.connect(audioCtx.destination); o.start(t); o.stop(t+dur);
+}
+function noise(dur,vol){
+  const n=audioCtx.sampleRate*dur, buf=audioCtx.createBuffer(1,n,audioCtx.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
+  const s=audioCtx.createBufferSource(), g=audioCtx.createGain(), t=audioCtx.currentTime;
+  s.buffer=buf; g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.01,t+dur);
+  s.connect(g); g.connect(audioCtx.destination); s.start(t);
+}
+function playSoundEffect(type){
+  initAudioContext(); if(!audioCtx) return;
+  if(type==='SHOOT_AK47'||type==='SHOOT_M4A4'){ tone('sawtooth',180,30,.18,.8); noise(.15,.9); }
+  else if(type==='SHOOT_AWP') tone('square',280,20,.4,1);
+  else if(type==='SHOOT_PISTOL') tone('triangle',300,40,.1,.6);
+  else if(type==='RELOAD') tone('sine',600,400,.25,.3);
+  else if(type==='SCOPE') tone('sine',1200,400,.08,.2);
+  else if(type==='HIT_KILL') tone('sine',880,1760,.2,.4);
+  else if(type==='EXPLOSION') noise(.8,1);
+}
+
+// ================= LANG / DATA =================
+let currentLang='GE';
+const TRANSLATIONS={
+  GE:{matchmaking:'🎮 CS LITE REALISTIC 3D WEAPONS & AUDIO',host:'🌐 ოთახის შექმნა (Host Code)',bot:'🤖 3D ბოტებთან თამაში',friends:'👥 მეგობრების სია / შეერთება',add:'შეერთება',shop:'📦 CS 3D GLB მოდელების არსენალი',equip:'არჩევა',equipped:'✓ არჩეულია'},
+  EN:{matchmaking:'🎮 CS LITE REALISTIC 3D WEAPONS & AUDIO',host:'🌐 CREATE ROOM (Host Code)',bot:'🤖 PLAY VS 3D BOTS',friends:'👥 FRIENDS LIST / JOIN',add:'JOIN',shop:'📦 CS 3D GLB MODELS ARSENAL',equip:'EQUIP',equipped:'✓ EQUIPPED'}
+};
+function toggleLanguage(){
+  currentLang=currentLang==='GE'?'EN':'GE';
+  document.getElementById('lang-label').innerText=currentLang;
+  const t=TRANSLATIONS[currentLang];
+  txt('txt-matchmaking',t.matchmaking); txt('btn-host',t.host); txt('btn-bot',t.bot);
+  txt('txt-friends',t.friends); txt('btn-add-friend',t.add); txt('txt-shop',t.shop);
+  updateLobbyUI();
+}
+function txt(id,v){ document.getElementById(id).innerText=v; }
+
+const WEAPONS_CATALOG=[
+  {id:1,name:'AK-47 Kalashnikov',modelFile:'ak47.glb',soundType:'SHOOT_AK47',slot:1,damage:36,clip:30,reserve:90,color:'#ff9900'},
+  {id:2,name:'M4A4 Howl Rifle',modelFile:'m4a4.glb',soundType:'SHOOT_M4A4',slot:1,damage:33,clip:30,reserve:90,color:'#ff5500'},
+  {id:3,name:'AWP Dragon Lore Sniper',modelFile:'awp.glb',soundType:'SHOOT_AWP',slot:1,damage:110,clip:10,reserve:40,color:'#ff00ff'},
+  {id:4,name:'Glock-18 Pistol',modelFile:'glock.glb',soundType:'SHOOT_PISTOL',slot:2,damage:24,clip:20,reserve:120,color:'#00f0ff'},
+  {id:5,name:'Desert Eagle Blaze',modelFile:'deagle.glb',soundType:'SHOOT_PISTOL',slot:2,damage:54,clip:7,reserve:35,color:'#ffd700'},
+  {id:6,name:'Karambit Doppler Knife',modelFile:'knife.glb',soundType:'SHOOT_PISTOL',slot:3,damage:85,clip:1,reserve:1,color:'#ff0055'}
+];
+const getWep=slot=>WEAPONS_CATALOG.find(w=>w.id===player.equipped[slot])||WEAPONS_CATALOG[0];
+
+let selectedMode='1v1';
+function selectMode(m){
+  selectedMode=m;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('m'+m[0]).classList.add('active');
+}
+
+let player=JSON.parse(localStorage.getItem('cs_player_data'))||{coins:800,level:1,wins:0,equipped:{1:1,2:4,3:6},friends:[]};
+function savePlayerData(){ localStorage.setItem('cs_player_data',JSON.stringify(player)); updateLobbyUI(); }
+
+// ================= NETWORK =================
+const LOBBY_ROOM_ID="cs_lite_global_public_match";
+let peer=null, conn=null;
+try{
+  peer=new Peer();
+  peer.on('open',id=>{document.getElementById('player-id-display').innerText=id;});
+  peer.on('connection',c=>{conn=c;setupNetworkListeners();initGame(true,false);});
+}catch(e){console.warn('PeerJS unavailable',e);}
+
+function startInstantOnlineMatch(){
+  initAudioContext();
+  conn=peer.connect(LOBBY_ROOM_ID);
+  let connected=false;
+  conn.on('open',()=>{connected=true;setupNetworkListeners();initGame(false,false);});
+  setTimeout(()=>{
+    if(!connected){
+      peer.destroy(); peer=new Peer(LOBBY_ROOM_ID);
+      peer.on('open',()=>alert("🌐 ონლაინ ოთახი შეიქმნა! ელოდებით მეორე მოთამაშეს..."));
+      peer.on('connection',c=>{conn=c;setupNetworkListeners();initGame(true,false);});
+      peer.on('error',()=>startBotMatch());
+    }
+  },1500);
+}
+function connectToFriendFromInput(){ initAudioContext(); const f=document.getElementById('friend-id-input').value.trim(); if(f) connectToFriend(f); }
+function startMatchHost(){ initAudioContext(); alert(`🌐 ოთახი შეიქმნა! თქვენი ID:\n${peer.id}`); initGame(true,false); }
+function startBotMatch(){ initAudioContext(); initGame(true,true); }
+function connectToFriend(f){ initAudioContext(); conn=peer.connect(f); setupNetworkListeners(); initGame(false,false); }
+function setupNetworkListeners(){
+  conn.on('data',d=>{
+    if(d.type==='GAME_STATE') remotePlayerState=d.player;
+    else if(d.type==='SHOOT') playSoundEffect('SHOOT_AK47');
+  });
+}
+
+function updateLobbyUI(){
+  txt('coins-display',player.coins); txt('lvl-display',player.level); txt('wins-display',player.wins||0);
+  const t=TRANSLATIONS[currentLang];
+  document.getElementById('friends-list').innerHTML=player.friends.map(f=>`<div class="friend-item"><span>${f.substring(0,10)}...</span><button class="btn-sec" style="padding:4px 8px;font-size:.75rem" onclick="connectToFriend('${f}')">Join</button></div>`).join('');
+  document.getElementById('weapon-shop-container').innerHTML=WEAPONS_CATALOG.map(w=>{
+    const eq=player.equipped[w.slot]===w.id;
+    return `<div class="weapon-card ${eq?'equipped':''}">
+      <div class="weapon-3d-tag">3D GLB MODEL</div>
+      <div class="weapon-model-preview"><div style="font-size:1.6rem">📦 3D</div><div class="model-file-badge">${w.modelFile}</div></div>
+      <div style="font-weight:800;color:${w.color};margin-bottom:2px">${w.name}</div>
+      <div style="font-size:.8rem;color:#aaa;margin-bottom:6px">Damage: ${w.damage} | Clip: ${w.clip}</div>
+      <button onclick="equipWeapon(${w.id},${w.slot})" style="width:100%;padding:8px;font-size:.85rem">${eq?t.equipped:t.equip}</button></div>`;
+  }).join('');
+}
+function equipWeapon(id,slot){ player.equipped[slot]=id; savePlayerData(); }
+
+// ================= GAME STATE =================
+let scene,camera,renderer,gameState='LOBBY';
+let viewmodelGroup,weaponPivot=null,localPlayerMesh,remoteMesh;
+let activeGrenades=[],activeSlot=1,kills=0,isBotMatch=false,isScoped=false;
+let matchTimer=300,timerInterval=null,mapLoaded=false,gameInited=false;
+const TARGET_KILLS=40;
+let cameraMode='FPP';
+const isTouch='ontouchstart' in window;
+let joyDir={forward:0,right:0};
+let localState={x:0,posY:0,velY:0,z:25,hp:100,rotY:0,pitchX:0,isJumping:false,isCrouching:false,clip:30,reserve:90};
+let remotePlayerState={x:0,posY:0,z:-25,hp:100,rotY:0};
+let keys={},isPointerLocked=false;
+const gltfLoader=new THREE.GLTFLoader();
+
+// ================= GLB LOADING (FIXED) =================
+function setStatus(file,ok){
+  const box=document.getElementById('glb-status'); if(!box) return;
+  if(location.protocol==='file:' && !box.querySelector('.warn')){
+    box.innerHTML='<div class="warn">⚠ გახსნილია file://-ით! GLB ვერ ჩაიტვირთება.<br>გაუშვით ლოკალური სერვერი (python -m http.server)</div>';
+  }
+  let row=box.querySelector('[data-f="'+file+'"]');
+  if(!row){ row=document.createElement('div'); row.dataset.f=file; box.appendChild(row); }
+  row.innerText=(ok?'✅ ':'❌ ')+file;
+  row.style.color=ok?'#7f7':'#f77';
+}
+// tries: name, name.glb (if missing), name.glb.glb, name without double extension
+function loadGLBSmart(filename,onSuccess,onError){
+  const base=filename.replace(/(\.glb)+$/i,'');
+  const tries=[base+'.glb',base+'.glb.glb',base+'.GLB',base];
+  const next=i=>{
+    if(i>=tries.length){ setStatus(filename,false); if(onError) onError(); return; }
+    gltfLoader.load(tries[i],g=>{ setStatus(filename,true); onSuccess(g); },undefined,()=>next(i+1));
+  };
+  next(0);
+}
+// Scale to target size and re-center (works with any model scale)
+function fitModel(model,target,mode){
+  const box=new THREE.Box3().setFromObject(model);
+  const size=box.getSize(new THREE.Vector3());
+  const m=mode==='height'?size.y:Math.max(size.x,size.y,size.z);
+  if(!m||!isFinite(m)) return model;
+  model.scale.multiplyScalar(target/m);
+  box.setFromObject(model);
+  const c=box.getCenter(new THREE.Vector3());
+  model.position.x-=c.x; model.position.z-=c.z;
+  model.position.y-= (mode==='height'||mode==='floor') ? box.min.y : c.y;
+  return model;
+}
+
+function toggleCameraView(){ cameraMode=cameraMode==='TPP'?'FPP':'TPP'; txt('cam-mode-val',`${cameraMode} (V)`); }
+function triggerMobileJump(){ if(!localState.isJumping&&!localState.isCrouching){localState.velY=.26;localState.isJumping=true;} }
+function toggleMobileCrouch(){ localState.isCrouching=!localState.isCrouching; }
+
+function toggleScopeZoom(){
+  if(gameState!=='PLAYING') return;
+  isScoped=!isScoped; playSoundEffect('SCOPE');
+  document.getElementById('sniper-scope-overlay').style.display=isScoped?'block':'none';
+  document.getElementById('crosshair').style.display=isScoped?'none':'block';
+  camera.fov=isScoped?20:65;
+  if(viewmodelGroup) viewmodelGroup.visible=!isScoped&&cameraMode==='FPP';
+  camera.updateProjectionMatrix();
+}
+
+function setupJoystick(){
+  const joy=document.getElementById('move-joy'), knob=document.getElementById('joy-knob');
+  let id=null,sx=0,sy=0;
+  joy.addEventListener('touchstart',e=>{
+    const t=e.changedTouches[0]; id=t.identifier;   // FIX: was missing [0]
+    const r=joy.getBoundingClientRect(); sx=r.left+r.width/2; sy=r.top+r.height/2;
+  },{passive:true});
+  window.addEventListener('touchmove',e=>{
+    if(id===null) return;
+    for(const t of e.changedTouches) if(t.identifier===id){
+      let dx=t.clientX-sx, dy=t.clientY-sy; const d=Math.hypot(dx,dy), R=38;
+      if(d>R){dx=dx/d*R;dy=dy/d*R;}
+      knob.style.transform=`translate(${dx}px,${dy}px)`; joyDir.right=dx/R; joyDir.forward=-dy/R;
+    }
+  },{passive:true});
+  const reset=e=>{ for(const t of e.changedTouches) if(t.identifier===id){id=null;knob.style.transform='translate(0,0)';joyDir.forward=0;joyDir.right=0;} };
+  window.addEventListener('touchend',reset); window.addEventListener('touchcancel',reset);
+}
+
+function initEngine3D(){
+  const canvas=document.getElementById('canvas3D');
+  scene=new THREE.Scene(); scene.background=new THREE.Color(0xdce8f5); scene.fog=new THREE.FogExp2(0xdce8f5,.005);
+  camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,1000);
+  renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+  renderer.setSize(innerWidth,innerHeight);
+  renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  scene.add(new THREE.AmbientLight(0xfff5e6,.9));
+  const sun=new THREE.DirectionalLight(0xfff0dd,1.5); sun.position.set(40,80,20); sun.castShadow=true; scene.add(sun);
+  scene.add(camera);
+  setupJoystick();
+  canvas.addEventListener('click',()=>{initAudioContext(); if(gameState==='PLAYING') canvas.requestPointerLock();});
+  canvas.addEventListener('contextmenu',e=>{e.preventDefault();toggleScopeZoom();});
+  document.addEventListener('pointerlockchange',()=>{isPointerLocked=(document.pointerLockElement===canvas);});
+  document.addEventListener('mousemove',e=>{
+    if(isPointerLocked&&gameState==='PLAYING'){
+      const s=isScoped?.0008:.0022;
+      localState.rotY-=e.movementX*s; localState.pitchX-=e.movementY*s;
+      localState.pitchX=Math.max(-1.4,Math.min(1.4,localState.pitchX));
+    }
+  });
+  addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+  requestAnimationFrame(mainRenderLoop);
+}
+
+function sandTexture(){
+  const c=document.createElement('canvas'); c.width=c.height=512; const x=c.getContext('2d');
+  x.fillStyle='#d8bd8e'; x.fillRect(0,0,512,512);
+  for(let i=0;i<3000;i++){x.fillStyle=Math.random()>.5?'rgba(180,140,90,.15)':'rgba(255,240,210,.2)';x.fillRect(Math.random()*512,Math.random()*512,Math.random()*4+1,Math.random()*4+1);}
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; return t;
+}
+function crateTexture(){
+  const c=document.createElement('canvas'); c.width=c.height=512; const x=c.getContext('2d');
+  x.fillStyle='#b3824d'; x.fillRect(0,0,512,512); x.fillStyle='#7a542a';
+  x.fillRect(0,0,512,32);x.fillRect(0,480,512,32);x.fillRect(0,0,32,512);x.fillRect(480,0,32,512);
+  x.strokeStyle='#4a3014'; x.lineWidth=6; x.beginPath();x.moveTo(32,32);x.lineTo(480,480);x.moveTo(480,32);x.lineTo(32,480);x.stroke();
+  return new THREE.CanvasTexture(c);
+}
+
+function load3DWeaponMesh(w){
+  if(weaponPivot){ viewmodelGroup.remove(weaponPivot); weaponPivot=null; }
+  const pivot=new THREE.Group(); pivot.position.set(.28,-.25,-.8);
+  weaponPivot=pivot; viewmodelGroup.add(pivot);
+  loadGLBSmart(w.modelFile,gltf=>{
+    if(weaponPivot!==pivot) return;                  // weapon was switched meanwhile
+    const m=gltf.scene;
+    const inner=new THREE.Group(); inner.add(m);
+    const b=new THREE.Box3().setFromObject(m).getSize(new THREE.Vector3());
+    if(b.x>b.z) inner.rotation.y=Math.PI/2;          // long axis -> forward
+    inner.updateMatrixWorld(true);
+    fitModel(inner,.9,'max');
+    pivot.add(inner); pivot.userData.inner=inner;
+  },()=>{
+    if(weaponPivot!==pivot) return;
+    const mat=new THREE.MeshStandardMaterial({color:0x1a1d22,metalness:.8,roughness:.2});
+    const s=new THREE.Mesh(new THREE.BoxGeometry(.12,.14,.6),mat); pivot.add(s);
+    const g=new THREE.Mesh(new THREE.BoxGeometry(.1,.3,.18),mat); g.position.set(0,-.15,.15); pivot.add(g);
+  });
+}
+
+function createFPSViewmodel(){
+  viewmodelGroup=new THREE.Group();
+  const arm=new THREE.Mesh(new THREE.CylinderGeometry(.12,.1,.8,12),new THREE.MeshStandardMaterial({color:0x2b3028}));
+  arm.rotation.x=Math.PI/3; arm.position.set(.4,-.4,-.4); viewmodelGroup.add(arm);
+  camera.add(viewmodelGroup);
+  load3DWeaponMesh(getWep(activeSlot));
+}
+
+function switchWeaponSlot(slot){
+  if(!viewmodelGroup) return;
+  if(isScoped) toggleScopeZoom();
+  activeSlot=slot;
+  document.querySelectorAll('.weapon-slot-btn').forEach((b,i)=>b.classList.toggle('active',i+1===slot));
+  const w=getWep(slot); localState.clip=w.clip; localState.reserve=w.reserve;
+  txt('ammo-clip',localState.clip); txt('ammo-reserve',localState.reserve);
+  load3DWeaponMesh(w);
+}
+
+function createFallbackArena(){
+  const sand=sandTexture(); sand.repeat.set(24,24);
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(180,180),new THREE.MeshStandardMaterial({map:sand}));
+  floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; scene.add(floor);
+  const wt=sandTexture(); wt.repeat.set(12,1); const wm=new THREE.MeshStandardMaterial({map:wt});
+  [[180,18,3,0,9,-90],[180,18,3,0,9,90],[3,18,180,-90,9,0],[3,18,180,90,9,0]].forEach(a=>{
+    const m=new THREE.Mesh(new THREE.BoxGeometry(a[0],a[1],a[2]),wm); m.position.set(a[3],a[4],a[5]); scene.add(m);
+  });
+  const crateMat=new THREE.MeshStandardMaterial({map:crateTexture()});
+  [[0,-5,5],[-12,-18,4.5],[15,12,5],[20,-10,4]].forEach(([x,z,s])=>{
+    const c=new THREE.Mesh(new THREE.BoxGeometry(s,s,s),crateMat); c.position.set(x,s/2,z); c.castShadow=true; scene.add(c);
+  });
+}
+function createCSGOTDMArena(){
+  mapLoaded=false;
+  loadGLBSmart('dust2.glb',gltf=>{
+    const map=gltf.scene; const wrap=new THREE.Group(); wrap.add(map);
+    fitModel(map,170,'floor');   // map width ~170 units, floor at y=0
+    // keep XZ centered
+    map.traverse(c=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true;}});
+    scene.add(wrap); mapLoaded=true;
+  },createFallbackArena);
+}
+
+function createSoldierMesh(team){
+  const group=new THREE.Group();
+  const file=team==='CT'?'ct.glb':'t.glb';
+  const place=g=>{
+    const m=g.scene; m.traverse(c=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true;}});
+    const wrap=new THREE.Group(); wrap.add(m); fitModel(wrap,3.2,'height'); group.add(wrap);
+  };
+  loadGLBSmart(file,place,()=>loadGLBSmart('player.glb',place,()=>{
+    const col=team==='CT'?0x1b2845:0x3d3522, mat=new THREE.MeshStandardMaterial({color:col});
+    const body=new THREE.Mesh(new THREE.CylinderGeometry(.55,.5,1.6,12),mat); body.position.y=1.6; group.add(body);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(.4,16,16),mat); head.position.y=2.8; group.add(head);
+  }));
+  return group;
+}
+
+function initGame(isHost,bot){
+  if(gameInited) return; gameInited=true;
+  isBotMatch=bot; gameState='PLAYING'; kills=0; matchTimer=300;
+  document.getElementById('lobby').classList.add('hidden');
+  document.getElementById('game-screen').classList.remove('hidden');
+  document.getElementById('glb-status').innerHTML='';
+  if(isTouch) document.getElementById('touch-controls').style.display='block';
+  setStatus('(start)',true); document.querySelector('[data-f="(start)"]').remove();
+
+  createCSGOTDMArena(); createFPSViewmodel();
+  localPlayerMesh=createSoldierMesh('CT'); scene.add(localPlayerMesh);
+  remoteMesh=createSoldierMesh('T'); scene.add(remoteMesh);
+  localState.x=0; localState.z=25; localState.posY=0; localState.hp=100;
+  setTimeout(()=>{const b=document.getElementById('glb-status'); if(b&&!b.querySelector('.warn')&&!b.innerText.includes('❌')) b.style.display='none';},8000);
+
+  timerInterval=setInterval(()=>{
+    if(gameState!=='PLAYING') return;
+    matchTimer--;
+    txt('timer-val',String(Math.floor(matchTimer/60)).padStart(2,'0')+':'+String(matchTimer%60).padStart(2,'0'));
+    if(matchTimer<=0){clearInterval(timerInterval);endGame(kills>=20);}
+  },1000);
+
+  addEventListener('keydown',e=>{
+    const k=e.key.toLowerCase(); keys[k]=true; if(e.code==='Space') keys.space=true;
+    if(k==='1') switchWeaponSlot(1); if(k==='2') switchWeaponSlot(2); if(k==='3') switchWeaponSlot(3);
+    if(k==='v'||k==='ვ') toggleCameraView();
+    if(k==='q'||k==='ქ') toggleScopeZoom();
+    if(k==='g'||k==='გ') throwGrenade('HE');
+    if(k==='x'||k==='ხ') throwGrenade('SMOKE');
+    if(k==='r'||k==='რ') reloadGun();
+    if(k==='b'&&weaponPivot&&weaponPivot.userData.inner) weaponPivot.userData.inner.rotation.y+=Math.PI; // flip weapon direction
+  });
+  addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false; if(e.code==='Space') keys.space=false;});
+  addEventListener('mousedown',e=>{ if(e.button===0) shoot3D(); });
+}
+
+function reloadGun(){
+  const w=getWep(activeSlot);
+  if(localState.clip<w.clip&&localState.reserve>0){
+    playSoundEffect('RELOAD');
+    const add=Math.min(w.clip-localState.clip,localState.reserve);
+    localState.clip+=add; localState.reserve-=add;
+    txt('ammo-clip',localState.clip); txt('ammo-reserve',localState.reserve);
+  }
+}
+function addKillFeedMsg(msg){
+  const d=document.createElement('div'); d.className='kill-msg'; d.innerText=msg;
+  document.getElementById('killfeed').appendChild(d); setTimeout(()=>d.remove(),4000);
+}
+function throwGrenade(type){
+  if(gameState!=='PLAYING') return;
+  const n=new THREE.Mesh(new THREE.CylinderGeometry(.1,.1,.3,10),new THREE.MeshStandardMaterial({color:0x335522}));
+  n.position.set(localState.x,localState.posY+1.8,localState.z);
+  const f=new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(localState.pitchX,localState.rotY,0,'YXZ'));
+  const v=f.multiplyScalar(.8); v.y=.3;
+  n.userData={type,vel:v,timer:90}; scene.add(n); activeGrenades.push(n);
+}
+
+function shoot3D(){
+  if(gameState!=='PLAYING'||localState.clip<=0) return;
+  localState.clip--; txt('ammo-clip',localState.clip);
+  const w=getWep(activeSlot); playSoundEffect(w.soundType||'SHOOT_AK47');
+  if(weaponPivot&&!isScoped){ weaponPivot.position.z+=.08; const p=weaponPivot; setTimeout(()=>{p.position.z-=.08;},60); }
+  const ray=new THREE.Raycaster(), dir=new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(localState.pitchX,localState.rotY,0,'YXZ'));
+  const origin=new THREE.Vector3(); camera.getWorldPosition(origin);
+  ray.set(origin,dir);
+  if(ray.intersectObject(remoteMesh,true).length>0){
+    playSoundEffect('HIT_KILL'); remotePlayerState.hp-=w.damage;
+    if(remotePlayerState.hp<=0){
+      kills++; txt('ct-score-val',kills); addKillFeedMsg(`Player 🔫 Bot (${w.name})`);
+      remotePlayerState.hp=100; remotePlayerState.x=(Math.random()-.5)*50; remotePlayerState.z=(Math.random()-.5)*50;
+      if(kills>=TARGET_KILLS) endGame(true);
+    }
+  }
+  if(conn&&!isBotMatch) conn.send({type:'SHOOT'});
+}
+
+function mainRenderLoop(){
+  if(gameState==='PLAYING'){
+    localState.isCrouching=!!(keys.c||keys['ჩ'])||localState.isCrouching&&isTouch;
+    const speed=localState.isCrouching?.09:(isScoped?.08:.18);
+    if((keys.space||keys[' '])&&!localState.isJumping){localState.velY=.25;localState.isJumping=true;}
+
+    let targetY=0;
+    if(!mapLoaded){   // platform/stairs only exist in fallback arena
+      if(localState.x>=-65&&localState.x<=-25&&localState.z>=-57.5&&localState.z<=-22.5) targetY=6;
+    }
+    if(localState.isJumping){
+      localState.posY+=localState.velY; localState.velY-=.014;
+      if(localState.posY<=targetY){localState.posY=targetY;localState.velY=0;localState.isJumping=false;}
+    } else localState.posY=targetY;
+
+    const up=new THREE.Vector3(0,1,0);
+    const fwd=new THREE.Vector3(0,0,-1).applyAxisAngle(up,localState.rotY);
+    const right=new THREE.Vector3(1,0,0).applyAxisAngle(up,localState.rotY);
+    if(keys.w||keys['წ']){localState.x+=fwd.x*speed;localState.z+=fwd.z*speed;}
+    if(keys.s||keys['ს']){localState.x-=fwd.x*speed;localState.z-=fwd.z*speed;}
+    if(keys.a||keys['ა']){localState.x-=right.x*speed;localState.z-=right.z*speed;}
+    if(keys.d||keys['დ']){localState.x+=right.x*speed;localState.z+=right.z*speed;}
+    if(joyDir.forward||joyDir.right){
+      localState.x+=(fwd.x*joyDir.forward+right.x*joyDir.right)*speed;
+      localState.z+=(fwd.z*joyDir.forward+right.z*joyDir.right)*speed;
+    }
+    localState.x=Math.max(-87,Math.min(87,localState.x)); localState.z=Math.max(-87,Math.min(87,localState.z));
+
+    localPlayerMesh.position.set(localState.x,localState.posY,localState.z);
+    localPlayerMesh.rotation.y=localState.rotY+Math.PI;   // models usually face +Z
+    localPlayerMesh.scale.y=localState.isCrouching?.6:1;
+
+    if(cameraMode==='FPP'){
+      camera.position.set(localState.x,localState.posY+(localState.isCrouching?1.4:2.7),localState.z);
+      camera.rotation.set(localState.pitchX,localState.rotY,0,'YXZ');
+      if(viewmodelGroup) viewmodelGroup.visible=!isScoped;
+      localPlayerMesh.visible=false;
+    } else {
+      camera.position.set(localState.x-fwd.x*6.5,localState.posY+(localState.isCrouching?2.5:3.8),localState.z-fwd.z*6.5);
+      camera.lookAt(localState.x+fwd.x*2,localState.posY+2.2,localState.z+fwd.z*2);
+      if(viewmodelGroup) viewmodelGroup.visible=false;
+      localPlayerMesh.visible=true;
+    }
+
+    if(isBotMatch){
+      const dx=localState.x-remotePlayerState.x, dz=localState.z-remotePlayerState.z, dist=Math.hypot(dx,dz);
+      remotePlayerState.rotY=Math.atan2(dx,dz);
+      if(dist>6){remotePlayerState.x+=Math.sin(remotePlayerState.rotY)*.07;remotePlayerState.z+=Math.cos(remotePlayerState.rotY)*.07;}
+    }
+    remoteMesh.position.set(remotePlayerState.x,remotePlayerState.posY||0,remotePlayerState.z);
+    remoteMesh.rotation.y=remotePlayerState.rotY;
+
+    if(conn&&!isBotMatch) conn.send({type:'GAME_STATE',player:localState});
+
+    for(let i=activeGrenades.length-1;i>=0;i--){
+      const n=activeGrenades[i];
+      n.position.add(n.userData.vel); n.userData.vel.y-=.015; n.userData.timer--;
+      if(n.position.y<=.2||n.userData.timer<=0){playSoundEffect('EXPLOSION');scene.remove(n);activeGrenades.splice(i,1);}
+    }
+    txt('hp-val',Math.max(0,localState.hp)); document.getElementById('hp-bar-fill').style.width=localState.hp+'%';
+  }
+  renderer.render(scene,camera);
+  requestAnimationFrame(mainRenderLoop);
+}
+
+function endGame(won){
+  clearInterval(timerInterval);
+  player.coins+=kills*10+(won?150:0); savePlayerData();
+  alert(`${won?'🏆 CS LITE WIN!':'☠️ DEFEAT!'}\n🎯 Kills: ${kills}/${TARGET_KILLS}`);
+  location.reload();
+}
+
+updateLobbyUI();
+initEngine3D();
+</script>
 </body>
 </html>
