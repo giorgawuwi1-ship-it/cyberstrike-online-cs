@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CS Lite Online 3D - Fixed Scaling & Audio Edition</title>
+    <title>CS Lite Online 3D - Advanced Movement & Audio Edition</title>
 
     <!-- PeerJS for Multiplayer -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -649,12 +649,15 @@
         let isTouch = 'ontouchstart' in window;
         let joyDir = { forward: 0, right: 0 };
 
+        // REALISTIC CS PHYSICS & MOVEMENT STATE
         let localState = { 
             x: 0, posY: 0, velY: 0, z: 25, hp: 100, rotY: 0, pitchX: 0,
+            vx: 0, vz: 0, // Inertia velocity
             isJumping: false, isCrouching: false,
+            walkTime: 0,
             clip: 30, reserve: 90
         };
-        let remotePlayerState = { x: 0, posY: 0, z: -25, hp: 100, rotY: 0 };
+        let remotePlayerState = { x: 0, posY: 0, z: -25, hp: 100, rotY: 0, walkTime: 0 };
 
         let keys = {};
         let isPointerLocked = false;
@@ -860,9 +863,6 @@
             return new THREE.CanvasTexture(canvas);
         }
 
-        // ==========================================
-        // 🛠️ FIXED WEAPON MODEL SCALING & POSITIONING
-        // ==========================================
         function load3DWeaponMesh(weaponObj) {
             if (current3DWeaponMesh) {
                 viewmodelGroup.remove(current3DWeaponMesh);
@@ -872,16 +872,14 @@
             loadGLBSmart(weaponObj.modelFile, (gltf) => {
                 current3DWeaponMesh = gltf.scene;
 
-                // Automatically normalize bounding box scale for any GLB weapon model
+                // Normalize bounding box scale
                 const bbox = new THREE.Box3().setFromObject(current3DWeaponMesh);
                 const size = bbox.getSize(new THREE.Vector3());
                 const maxDim = Math.max(size.x, size.y, size.z);
 
-                // Target weapon length ~ 0.55 meters in first-person camera space
                 let targetScale = 0.55 / (maxDim || 1);
                 current3DWeaponMesh.scale.set(targetScale, targetScale, targetScale);
 
-                // Center bounding box & position nicely in hand view
                 const center = bbox.getCenter(new THREE.Vector3());
                 current3DWeaponMesh.position.set(
                     0.22 - center.x * targetScale,
@@ -890,15 +888,11 @@
                 );
 
                 current3DWeaponMesh.traverse(c => {
-                    if (c.isMesh) {
-                        c.castShadow = true;
-                        c.receiveShadow = true;
-                    }
+                    if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; }
                 });
 
                 viewmodelGroup.add(current3DWeaponMesh);
             }, (err) => {
-                // Procedural fallback if model file fails to load
                 const meshGroup = new THREE.Group();
                 const mat = new THREE.MeshStandardMaterial({ color: 0x1a1d22, metalness: 0.8, roughness: 0.2 });
                 const slide = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.6), mat);
@@ -929,7 +923,7 @@
             viewmodelGroup.add(rightArm);
 
             const activeWepId = player.equipped[activeSlot];
-            const activeWep = WEAPONS_CATALOG.find(w => w.id === activeWepId) || WEAPONS_CATALOG[0];
+            const activeWep = WEAPONS_CATALOG.find(w => w.id === activeWepId) || WEAPONS_CATALOG;
             load3DWeaponMesh(activeWep);
 
             camera.add(viewmodelGroup);
@@ -944,7 +938,7 @@
             });
 
             const wepId = player.equipped[slot];
-            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG[0];
+            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG;
             localState.clip = wep.clip; localState.reserve = wep.reserve;
             document.getElementById('ammo-clip').innerText = localState.clip;
             document.getElementById('ammo-reserve').innerText = localState.reserve;
@@ -1026,11 +1020,10 @@
             loadGLBSmart(primaryModel, (gltf) => {
                 const model = gltf.scene;
                 
-                // Auto scale soldier mesh to human height (~1.8m)
                 const bbox = new THREE.Box3().setFromObject(model);
                 const size = bbox.getSize(new THREE.Vector3());
                 let scaleVal = 1.8 / (size.y || 1);
-                if (scaleVal > 0.1) scaleVal = 0.018; // cap safety
+                if (scaleVal > 0.1) scaleVal = 0.018;
 
                 model.scale.set(scaleVal, scaleVal, scaleVal);
                 model.position.y = 0;
@@ -1091,6 +1084,7 @@
             scene.add(remoteMesh);
 
             localState.x = 0; localState.z = 25; localState.posY = 0;
+            localState.vx = 0; localState.vz = 0;
             localState.hp = 100;
 
             if (timerInterval) clearInterval(timerInterval);
@@ -1131,7 +1125,7 @@
 
         function reloadGun() {
             const wepId = player.equipped[activeSlot];
-            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG[0];
+            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG;
             if (localState.clip < wep.clip && localState.reserve > 0) {
                 playSoundEffect('RELOAD');
                 const needed = wep.clip - localState.clip;
@@ -1170,9 +1164,8 @@
             document.getElementById('ammo-clip').innerText = localState.clip;
 
             const wepId = player.equipped[activeSlot];
-            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG[0];
+            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG;
 
-            // PLAY SOUND EFFECT
             playSoundEffect(wep.soundType || 'SHOOT_AK47');
 
             if (current3DWeaponMesh && !isScoped) {
@@ -1204,11 +1197,16 @@
             }
         }
 
+        // =======================================================
+        // 🏃 REALISTIC CS:GO PHYSICS, HEAD BOB & WEAPON SWAY ENGINE
+        // =======================================================
         function mainRenderLoop() {
             if (gameState === 'PLAYING') {
                 
                 localState.isCrouching = keys['c'] || keys['ჩ'];
-                let speed = localState.isCrouching ? 0.09 : (isScoped ? 0.08 : 0.18);
+                let targetMaxSpeed = localState.isCrouching ? 0.09 : (isScoped ? 0.08 : 0.22);
+                let accel = 0.045; // Smooth acceleration
+                let friction = 0.78; // CS counter-strafe friction
 
                 if ((keys['space'] || keys[' ']) && !localState.isJumping) {
                     localState.velY = 0.25; localState.isJumping = true;
@@ -1233,30 +1231,73 @@
                 const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), localState.rotY);
                 const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), localState.rotY);
 
-                if (keys['w'] || keys['წ']) { localState.x += forward.x * speed; localState.z += forward.z * speed; }
-                if (keys['s'] || keys['ს']) { localState.x -= forward.x * speed; localState.z -= forward.z * speed; }
-                if (keys['a'] || keys['ა']) { localState.x -= right.x * speed; localState.z -= right.z * speed; }
-                if (keys['d'] || keys['დ']) { localState.x += right.x * speed; localState.z += right.z * speed; }
+                let dirX = 0, dirZ = 0;
+                if (keys['w'] || keys['წ']) { dirX += forward.x; dirZ += forward.z; }
+                if (keys['s'] || keys['ს']) { dirX -= forward.x; dirZ -= forward.z; }
+                if (keys['a'] || keys['ა']) { dirX -= right.x; dirZ -= right.z; }
+                if (keys['d'] || keys['დ']) { dirX += right.x; dirZ += right.z; }
 
                 if (joyDir.forward !== 0 || joyDir.right !== 0) {
-                    localState.x += (forward.x * joyDir.forward + right.x * joyDir.right) * speed;
-                    localState.z += (forward.z * joyDir.forward + right.z * joyDir.right) * speed;
+                    dirX += (forward.x * joyDir.forward + right.x * joyDir.right);
+                    dirZ += (forward.z * joyDir.forward + right.z * joyDir.right);
                 }
+
+                // Apply Inertia & Friction
+                if (dirX !== 0 || dirZ !== 0) {
+                    let len = Math.hypot(dirX, dirZ);
+                    dirX /= len; dirZ /= len;
+                    localState.vx += dirX * accel;
+                    localState.vz += dirZ * accel;
+                }
+
+                // Apply Friction
+                localState.vx *= friction;
+                localState.vz *= friction;
+
+                // Cap max velocity
+                let curSpeed = Math.hypot(localState.vx, localState.vz);
+                if (curSpeed > targetMaxSpeed) {
+                    localState.vx = (localState.vx / curSpeed) * targetMaxSpeed;
+                    localState.vz = (localState.vz / curSpeed) * targetMaxSpeed;
+                    curSpeed = targetMaxSpeed;
+                }
+
+                localState.x += localState.vx;
+                localState.z += localState.vz;
 
                 localState.x = Math.max(-87, Math.min(87, localState.x));
                 localState.z = Math.max(-87, Math.min(87, localState.z));
 
+                // Head Bobbing & Weapon Sway calculation
+                let isMoving = curSpeed > 0.02;
+                if (isMoving && !localState.isJumping) {
+                    localState.walkTime += curSpeed * 42;
+                } else {
+                    localState.walkTime = THREE.MathUtils.lerp(localState.walkTime, 0, 0.1);
+                }
+
+                let headBobY = Math.sin(localState.walkTime) * (isMoving ? 0.08 : 0.015);
+                let headBobX = Math.cos(localState.walkTime * 0.5) * (isMoving ? 0.05 : 0.01);
+                let weaponSwayX = Math.cos(localState.walkTime * 0.5) * (isMoving ? 0.03 : 0.005);
+                let weaponSwayY = Math.sin(localState.walkTime) * (isMoving ? 0.03 : 0.005);
+
+                // Update Local Player Soldier Mesh (TPP view) with procedural walking tilt
                 if (localPlayerMesh) {
                     localPlayerMesh.position.set(localState.x, localState.posY, localState.z);
                     localPlayerMesh.rotation.y = localState.rotY;
+                    localPlayerMesh.rotation.z = isMoving ? Math.sin(localState.walkTime) * 0.04 : 0; // Walking sway
                     localPlayerMesh.scale.y = localState.isCrouching ? 0.6 : 1.0;
                 }
 
                 if (cameraMode === 'FPP') {
-                    const camY = localState.posY + (localState.isCrouching ? 1.4 : 2.7);
-                    camera.position.set(localState.x, camY, localState.z);
+                    const baseCamY = localState.posY + (localState.isCrouching ? 1.4 : 2.7);
+                    camera.position.set(localState.x + headBobX * 0.4, baseCamY + headBobY, localState.z);
                     camera.rotation.set(localState.pitchX, localState.rotY, 0, 'YXZ');
-                    if (viewmodelGroup && !isScoped) viewmodelGroup.visible = true;
+
+                    if (viewmodelGroup && !isScoped) {
+                        viewmodelGroup.visible = true;
+                        viewmodelGroup.position.set(weaponSwayX, weaponSwayY, 0);
+                    }
                     if (localPlayerMesh) localPlayerMesh.visible = false;
                 } else {
                     const distBehind = 6.5;
@@ -1278,6 +1319,7 @@
                     remotePlayerState.rotY = Math.atan2(dx, dz);
 
                     if (dist > 6) {
+                        remotePlayerState.walkTime += 0.15;
                         remotePlayerState.x += Math.sin(remotePlayerState.rotY) * 0.07;
                         remotePlayerState.z += Math.cos(remotePlayerState.rotY) * 0.07;
                     }
@@ -1285,6 +1327,7 @@
 
                 remoteMesh.position.set(remotePlayerState.x, remotePlayerState.posY, remotePlayerState.z);
                 remoteMesh.rotation.y = remotePlayerState.rotY;
+                remoteMesh.rotation.z = Math.sin(remotePlayerState.walkTime) * 0.04;
 
                 if (conn && !isBotMatch) {
                     conn.send({ type: 'GAME_STATE', player: localState });
