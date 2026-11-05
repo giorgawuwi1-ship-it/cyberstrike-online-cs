@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="ka">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CS Lite Online 3D - Draco GLB Loader & Proportional Scale</title>
+    <title>CS Lite Online 3D - Active Enemy Bots & Auto Fire</title>
 
     <!-- PeerJS for Multiplayer -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -12,7 +11,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- Three.js GLTFLoader -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <!-- Three.js DRACOLoader (Crucial for compressed 3D GLB maps) -->
+    <!-- Three.js DRACOLoader for compressed 3D GLB maps -->
     <script src="[suspicious link removed]"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -191,6 +190,11 @@
             content: ''; position: absolute; top: 50%; left: 0; width: 100vw; height: 2px; background: rgba(0, 0, 0, 0.85); transform: translateY(-50%);
         }
 
+        #damage-flash {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(255, 0, 0, 0.3); pointer-events: none; z-index: 12; display: none;
+        }
+
         .cs-money {
             position: absolute; bottom: 25px; left: 35px;
             font-size: 2.5rem; font-weight: 900; color: #55ff55;
@@ -255,6 +259,7 @@
     </div>
 
     <canvas id="canvas3D"></canvas>
+    <div id="damage-flash"></div>
 
     <div id="lobby" class="screen interactive-ui">
         <div class="header">
@@ -303,14 +308,13 @@
             <button class="cam-mode-indicator" onclick="toggleCameraView()">🎥 VIEW: <span id="cam-mode-val">FPP (V)</span></button>
 
             <div class="cs-scoreboard">
-                <span class="team-score ct-score" id="ct-score-val">5</span>
+                <span class="team-score ct-score" id="ct-score-val">0</span>
                 <span class="match-clock" id="timer-val">05:00</span>
-                <span class="team-score t-score" id="t-score-val">3</span>
+                <span class="team-score t-score" id="t-score-val">0</span>
             </div>
 
             <div id="killfeed">
-                <div class="kill-msg">Bot Fox 🔫 Bot Max</div>
-                <div class="kill-msg">Bot Storm 🔫 Bot Nikita</div>
+                <div class="kill-msg">Bot Max 🔫 Joined Game</div>
             </div>
             
             <div id="crosshair"></div>
@@ -637,13 +641,14 @@
         let viewmodelGroup, current3DWeaponMesh = null;
         let localPlayerMesh, remoteMesh;
         let activeGrenades = [];
-        let activeSlot = 1, kills = 0, isBotMatch = false;
+        let activeSlot = 1, kills = 0, enemyKills = 0, isBotMatch = false;
 
         let isScoped = false;
 
         let isMouseDown = false;
         let isMobileFiring = false;
         let lastShotTimestamp = 0;
+        let botLastShotTimestamp = 0;
 
         let matchTimer = 300;
         let timerInterval = null;
@@ -665,7 +670,6 @@
         let keys = {};
         let isPointerLocked = false;
         
-        // Setup GLTFLoader with DRACOLoader support for compressed 3D GLB maps
         const gltfLoader = new THREE.GLTFLoader();
         if (THREE.DRACOLoader) {
             const dracoLoader = new THREE.DRACOLoader();
@@ -673,7 +677,6 @@
             gltfLoader.setDRACOLoader(dracoLoader);
         }
 
-        // Ultra-robust GLB loader that tries all path & naming variations
         function loadGLBSmart(filename, onSuccess, onError) {
             const candidates = [
                 filename,
@@ -901,7 +904,7 @@
                 const maxDim = Math.max(size.x, size.y, size.z);
 
                 if (maxDim > 0) {
-                    let targetScale = 0.25 / maxDim; // Adjusted scale to fit smaller player model
+                    let targetScale = 0.25 / maxDim;
                     current3DWeaponMesh.scale.set(targetScale, targetScale, targetScale);
 
                     const center = bbox.getCenter(new THREE.Vector3());
@@ -956,9 +959,6 @@
             load3DWeaponMesh(wep);
         }
 
-        // =======================================================
-        // 🗺️ RELIABLE DUST2 MAP LOADER WITH DRACO SUPPORT
-        // =======================================================
         function createCSGOTDMArena() {
             loadGLBSmart('dust2.glb', (gltf) => {
                 const mapScene = gltf.scene;
@@ -984,7 +984,6 @@
 
                 scene.add(mapScene);
             }, () => {
-                // Procedural Sandstone Map Fallback if dust2.glb file is missing
                 const sandTex = createSandstoneTexture();
                 sandTex.repeat.set(24, 24);
                 const floorMat = new THREE.MeshStandardMaterial({ map: sandTex, roughness: 0.85, color: 0xd8bd8e });
@@ -1046,9 +1045,6 @@
             });
         }
 
-        // =======================================================
-        // 🧍 PROPORTIONAL SOLDIER SCALING (0.55m HEIGHT TO FIT DUST2 DOORS & CRATES)
-        // =======================================================
         function createCSGOSoldierMesh(teamType) {
             const group = new THREE.Group();
             const primaryModel = teamType === 'CT' ? 'ct.glb' : 't.glb';
@@ -1059,7 +1055,7 @@
                 const bbox = new THREE.Box3().setFromObject(model);
                 const size = bbox.getSize(new THREE.Vector3());
                 if (size.y > 0) {
-                    const targetHeight = 0.55; // PROPORTIONAL HEIGHT FOR DUST2 MAP
+                    const targetHeight = 0.55;
                     const scaleFactor = targetHeight / size.y;
                     model.scale.set(scaleFactor, scaleFactor, scaleFactor);
                     
@@ -1088,7 +1084,6 @@
                     const bodyMat = new THREE.MeshStandardMaterial({ color: mainColor, roughness: 0.5, metalness: 0.2 });
                     const vestMat = new THREE.MeshStandardMaterial({ color: 0x11141a, roughness: 0.4 });
 
-                    // Procedural mini soldier
                     const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.35, 12), bodyMat);
                     body.position.y = 0.25; body.castShadow = true; group.add(body);
 
@@ -1115,7 +1110,11 @@
             isBotMatch = botMatch;
             gameState = 'PLAYING';
             kills = 0;
+            enemyKills = 0;
             matchTimer = 300;
+
+            document.getElementById('ct-score-val').innerText = '0';
+            document.getElementById('t-score-val').innerText = '0';
 
             document.getElementById('lobby').classList.add('hidden');
             document.getElementById('game-screen').classList.remove('hidden');
@@ -1142,7 +1141,7 @@
                     const secs = String(Math.floor(matchTimer % 60)).padStart(2, '0');
                     document.getElementById('timer-val').innerText = `${mins}:${secs}`;
 
-                    if (matchTimer <= 0) { clearInterval(timerInterval); endGame(kills >= 20); }
+                    if (matchTimer <= 0) { clearInterval(timerInterval); endGame(kills > enemyKills); }
                 }
             }, 1000);
 
@@ -1206,6 +1205,14 @@
             div.className = 'kill-msg'; div.innerText = msg;
             kf.appendChild(div);
             setTimeout(() => div.remove(), 4000);
+        }
+
+        function triggerDamageFlash() {
+            const df = document.getElementById('damage-flash');
+            if (df) {
+                df.style.display = 'block';
+                setTimeout(() => { df.style.display = 'none'; }, 150);
+            }
         }
 
         function throwGrenade(type) {
@@ -1277,7 +1284,60 @@
             }
         }
 
+        // =======================================================
+        // 🤖 ACTIVE ENEMY BOT SHOOTING AI
+        // =======================================================
+        function updateEnemyBotAI(now) {
+            if (!isBotMatch || gameState !== 'PLAYING') return;
+
+            let dx = localState.x - remotePlayerState.x;
+            let dz = localState.z - remotePlayerState.z;
+            let dist = Math.hypot(dx, dz);
+
+            // Turn towards local player
+            remotePlayerState.rotY = Math.atan2(dx, dz);
+
+            // Movement logic
+            if (dist > 4) {
+                remotePlayerState.walkTime += 0.15;
+                remotePlayerState.x += Math.sin(remotePlayerState.rotY) * 0.035;
+                remotePlayerState.z += Math.cos(remotePlayerState.rotY) * 0.035;
+            }
+
+            // Bot Shooting logic (fires every 450ms when in range)
+            if (dist < 35 && now - botLastShotTimestamp > 450) {
+                botLastShotTimestamp = now;
+
+                // Play enemy bot firing sound
+                playSoundEffect('SHOOT_AK47');
+
+                // Bot accuracy calculation (higher hit chance when closer)
+                let hitChance = dist < 12 ? 0.60 : 0.35;
+                if (Math.random() < hitChance) {
+                    // Bot hit local player!
+                    localState.hp -= 14;
+                    triggerDamageFlash();
+                    playSoundEffect('SHOOT_PISTOL');
+
+                    if (localState.hp <= 0) {
+                        enemyKills++;
+                        document.getElementById('t-score-val').innerText = enemyKills;
+                        addKillFeedMsg(`Bot Max 🔫 Player (AK-47)`);
+
+                        // Respawn player
+                        localState.hp = 100;
+                        localState.x = (Math.random() - 0.5) * 20;
+                        localState.z = 25;
+
+                        if (enemyKills >= TARGET_KILLS) endGame(false);
+                    }
+                }
+            }
+        }
+
         function mainRenderLoop() {
+            const now = Date.now();
+
             if (gameState === 'PLAYING') {
                 
                 if (isMouseDown || isMobileFiring) {
@@ -1362,7 +1422,7 @@
                 }
 
                 if (cameraMode === 'FPP') {
-                    const baseCamY = localState.posY + (localState.isCrouching ? 0.35 : 0.50); // PROPORTIONAL EYE-LEVEL CAMERA
+                    const baseCamY = localState.posY + (localState.isCrouching ? 0.35 : 0.50);
                     camera.position.set(localState.x + headBobX * 0.3, baseCamY + headBobY, localState.z);
                     camera.rotation.set(localState.pitchX, localState.rotY, 0, 'YXZ');
 
@@ -1384,18 +1444,8 @@
                     if (localPlayerMesh) localPlayerMesh.visible = true;
                 }
 
-                if (isBotMatch) {
-                    let dx = localState.x - remotePlayerState.x;
-                    let dz = localState.z - remotePlayerState.z;
-                    let dist = Math.hypot(dx, dz);
-                    remotePlayerState.rotY = Math.atan2(dx, dz);
-
-                    if (dist > 3) {
-                        remotePlayerState.walkTime += 0.15;
-                        remotePlayerState.x += Math.sin(remotePlayerState.rotY) * 0.035;
-                        remotePlayerState.z += Math.cos(remotePlayerState.rotY) * 0.035;
-                    }
-                }
+                // Update Bot AI & Shooting
+                updateEnemyBotAI(now);
 
                 remoteMesh.position.set(remotePlayerState.x, remotePlayerState.posY, remotePlayerState.z);
                 remoteMesh.rotation.y = remotePlayerState.rotY;
@@ -1414,7 +1464,7 @@
                 });
 
                 document.getElementById('hp-val').innerText = Math.max(0, localState.hp);
-                document.getElementById('hp-bar-fill').style.width = `${localState.hp}%`;
+                document.getElementById('hp-bar-fill').style.width = `${Math.max(0, localState.hp)}%`;
             }
 
             renderer.render(scene, camera);
@@ -1431,7 +1481,7 @@
             if (timerInterval) clearInterval(timerInterval);
             player.coins += kills * 10 + (won ? 150 : 0);
             savePlayerData();
-            alert(`${won ? '🏆 CS LITE WIN!' : '☠️ DEFEAT!'}\n🎯 Kills: ${kills}/${TARGET_KILLS}`);
+            alert(`${won ? '🏆 CS LITE WIN!' : '☠️ DEFEAT!'}\n🎯 Your Kills: ${kills}\n🤖 Bot Kills: ${enemyKills}`);
             location.reload();
         }
 
