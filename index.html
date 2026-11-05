@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CS Lite Online 3D - Auto Fire & Fixed Menu</title>
+    <title>CS Lite Online 3D - Fixed Weapon Rotation & Robust GLB Loader</title>
 
     <!-- PeerJS for Multiplayer -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -496,7 +496,6 @@
             updateLobbyUI();
         }
 
-        // 3D GLB Models Arsenal (With Fire Modes: 'AUTO' vs 'SINGLE')
         const WEAPONS_CATALOG = [
             { id: 1, name: 'AK-47 Kalashnikov', type: 'AK47', modelFile: 'ak47.glb', soundType: 'SHOOT_AK47', slot: 1, damage: 36, clip: 30, reserve: 90, color: '#ff9900', fireMode: 'AUTO', fireRateDelay: 105 },
             { id: 2, name: 'M4A4 Howl Rifle', type: 'M4A4', modelFile: 'm4a4.glb', soundType: 'SHOOT_M4A4', slot: 1, damage: 33, clip: 30, reserve: 90, color: '#ff5500', fireMode: 'AUTO', fireRateDelay: 95 },
@@ -639,7 +638,6 @@
 
         let isScoped = false;
 
-        // Auto Fire Mechanics
         let isMouseDown = false;
         let isMobileFiring = false;
         let lastShotTimestamp = 0;
@@ -665,19 +663,33 @@
         let isPointerLocked = false;
         const gltfLoader = new THREE.GLTFLoader();
 
+        // Ultra-robust GLB loader that tries all path & naming variations
         function loadGLBSmart(filename, onSuccess, onError) {
-            let altFilename = filename.endsWith('.glb') ? filename + '.glb' : filename;
-            if (filename.endsWith('.glb.glb')) altFilename = filename.replace('.glb.glb', '.glb');
+            const candidates = [
+                filename,
+                './' + filename,
+                filename.toLowerCase(),
+                filename.endsWith('.glb') ? filename.replace('.glb', '.glb.glb') : filename + '.glb',
+                filename.endsWith('.glb') ? filename + '.glb' : filename,
+                'dust2-short/' + filename,
+                'models/' + filename
+            ];
+            const uniqueCandidates = [...new Set(candidates)];
 
-            gltfLoader.load(filename, (gltf) => {
-                onSuccess(gltf);
-            }, undefined, (err1) => {
-                gltfLoader.load(altFilename, (gltf2) => {
-                    onSuccess(gltf2);
-                }, undefined, (err2) => {
-                    if (onError) onError(err2);
+            let index = 0;
+            function tryNext() {
+                if (index >= uniqueCandidates.length) {
+                    if (onError) onError(new Error("Failed to load GLB after trying candidate paths"));
+                    return;
+                }
+                const currentPath = uniqueCandidates[index++];
+                gltfLoader.load(currentPath, (gltf) => {
+                    onSuccess(gltf);
+                }, undefined, (err) => {
+                    tryNext();
                 });
-            });
+            }
+            tryNext();
         }
 
         function toggleCameraView() {
@@ -725,7 +737,7 @@
             let startX = 0, startY = 0;
 
             joyContainer.addEventListener('touchstart', e => {
-                const touch = e.changedTouches[0];
+                const touch = e.changedTouches;
                 joyTouchId = touch.identifier;
                 const rect = joyContainer.getBoundingClientRect();
                 startX = rect.left + rect.width / 2;
@@ -864,6 +876,9 @@
             return new THREE.CanvasTexture(canvas);
         }
 
+        // =======================================================
+        // 🛠️ CORRECT WEAPON ORIENTATION & SCALING (ROTATED 180° FORWARD)
+        // =======================================================
         function load3DWeaponMesh(weaponObj) {
             if (current3DWeaponMesh) {
                 viewmodelGroup.remove(current3DWeaponMesh);
@@ -872,6 +887,9 @@
 
             loadGLBSmart(weaponObj.modelFile, (gltf) => {
                 current3DWeaponMesh = gltf.scene;
+
+                // Rotate 180 degrees so gun barrel points FORWARD (-Z) instead of backward
+                current3DWeaponMesh.rotation.y = Math.PI;
 
                 const bbox = new THREE.Box3().setFromObject(current3DWeaponMesh);
                 const size = bbox.getSize(new THREE.Vector3());
@@ -883,8 +901,8 @@
 
                     const center = bbox.getCenter(new THREE.Vector3());
                     current3DWeaponMesh.position.set(
-                        0.20 - center.x * targetScale,
-                        -0.20 - center.y * targetScale,
+                        0.22 - center.x * targetScale,
+                        -0.18 - center.y * targetScale,
                         -0.45 - center.z * targetScale
                     );
                 }
@@ -910,7 +928,7 @@
             viewmodelGroup = new THREE.Group();
 
             const activeWepId = player.equipped[activeSlot];
-            const activeWep = WEAPONS_CATALOG.find(w => w.id === activeWepId) || WEAPONS_CATALOG[0];
+            const activeWep = WEAPONS_CATALOG.find(w => w.id === activeWepId) || WEAPONS_CATALOG;
             load3DWeaponMesh(activeWep);
 
             camera.add(viewmodelGroup);
@@ -925,7 +943,7 @@
             });
 
             const wepId = player.equipped[slot];
-            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG[0];
+            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG;
             localState.clip = wep.clip; localState.reserve = wep.reserve;
             document.getElementById('ammo-clip').innerText = localState.clip;
             document.getElementById('ammo-reserve').innerText = localState.reserve;
@@ -933,6 +951,9 @@
             load3DWeaponMesh(wep);
         }
 
+        // =======================================================
+        // 🗺️ RELIABLE DUST2 MAP LOADER WITH MULTI-PATH FALLBACKS
+        // =======================================================
         function createCSGOTDMArena() {
             loadGLBSmart('dust2.glb', (gltf) => {
                 const mapScene = gltf.scene;
@@ -941,16 +962,24 @@
                 const mapSize = mapBbox.getSize(new THREE.Vector3());
                 const maxMapDim = Math.max(mapSize.x, mapSize.z);
 
-                if (maxMapDim > 300 || maxMapDim < 30) {
-                    let desiredMapScale = 150 / (maxMapDim || 1);
+                if (maxMapDim > 0) {
+                    let desiredMapScale = 160 / maxMapDim;
                     mapScene.scale.set(desiredMapScale, desiredMapScale, desiredMapScale);
                 }
 
                 const updatedBbox = new THREE.Box3().setFromObject(mapScene);
                 mapScene.position.y = -updatedBbox.min.y;
 
+                mapScene.traverse(c => {
+                    if (c.isMesh) {
+                        c.receiveShadow = true;
+                        c.castShadow = true;
+                    }
+                });
+
                 scene.add(mapScene);
             }, () => {
+                // Procedural Sandstone Map Fallback if dust2.glb file is missing
                 const sandTex = createSandstoneTexture();
                 sandTex.repeat.set(24, 24);
                 const floorMat = new THREE.MeshStandardMaterial({ map: sandTex, roughness: 0.85, color: 0xd8bd8e });
@@ -1127,7 +1156,6 @@
                 if (e.code === 'Space') keys['space'] = false;
             });
 
-            // Auto-Fire Mouse Controls
             window.addEventListener('mousedown', (e) => {
                 if (e.button === 0) {
                     isMouseDown = true;
@@ -1142,7 +1170,6 @@
 
             window.addEventListener('blur', () => { isMouseDown = false; isMobileFiring = false; });
 
-            // Mobile Touch Fire Button
             const mobFire = document.getElementById('mob-fire-btn');
             if (mobFire) {
                 mobFire.addEventListener('touchstart', (e) => { e.preventDefault(); isMobileFiring = true; handleWeaponFiring(true); }, { passive: false });
@@ -1152,7 +1179,7 @@
 
         function reloadGun() {
             const wepId = player.equipped[activeSlot];
-            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG[0];
+            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG;
             if (localState.clip < wep.clip && localState.reserve > 0) {
                 playSoundEffect('RELOAD');
                 const needed = wep.clip - localState.clip;
@@ -1188,7 +1215,7 @@
             if (gameState !== 'PLAYING') return;
 
             const wepId = player.equipped[activeSlot];
-            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG[0];
+            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG;
 
             const now = Date.now();
             const delay = wep.fireRateDelay || 120;
@@ -1208,7 +1235,7 @@
             document.getElementById('ammo-clip').innerText = localState.clip;
 
             const wepId = player.equipped[activeSlot];
-            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG[0];
+            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG;
 
             playSoundEffect(wep.soundType || 'SHOOT_AK47');
 
@@ -1244,7 +1271,6 @@
         function mainRenderLoop() {
             if (gameState === 'PLAYING') {
                 
-                // Continuous Auto Firing System
                 if (isMouseDown || isMobileFiring) {
                     handleWeaponFiring(false);
                 }
