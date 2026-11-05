@@ -1,16 +1,19 @@
+
 <!DOCTYPE html>
 <html lang="ka">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CS Lite Online 3D - Fixed Weapon Rotation & Robust GLB Loader</title>
+    <title>CS Lite Online 3D - Draco GLB Loader & Proportional Scale</title>
 
     <!-- PeerJS for Multiplayer -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <!-- Three.js Engine -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- Three.js GLTFLoader for 3D GLB Models -->
+    <!-- Three.js GLTFLoader -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <!-- Three.js DRACOLoader (Crucial for compressed 3D GLB maps) -->
+    <script src="[suspicious link removed]"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700;800&display=swap" rel="stylesheet">
     
@@ -661,7 +664,14 @@
 
         let keys = {};
         let isPointerLocked = false;
+        
+        // Setup GLTFLoader with DRACOLoader support for compressed 3D GLB maps
         const gltfLoader = new THREE.GLTFLoader();
+        if (THREE.DRACOLoader) {
+            const dracoLoader = new THREE.DRACOLoader();
+            dracoLoader.setDecoderPath('[suspicious link removed]');
+            gltfLoader.setDRACOLoader(dracoLoader);
+        }
 
         // Ultra-robust GLB loader that tries all path & naming variations
         function loadGLBSmart(filename, onSuccess, onError) {
@@ -699,7 +709,7 @@
 
         function triggerMobileJump() {
             if (!localState.isJumping && !localState.isCrouching) {
-                localState.velY = 0.26;
+                localState.velY = 0.16;
                 localState.isJumping = true;
             }
         }
@@ -876,9 +886,6 @@
             return new THREE.CanvasTexture(canvas);
         }
 
-        // =======================================================
-        // 🛠️ CORRECT WEAPON ORIENTATION & SCALING (ROTATED 180° FORWARD)
-        // =======================================================
         function load3DWeaponMesh(weaponObj) {
             if (current3DWeaponMesh) {
                 viewmodelGroup.remove(current3DWeaponMesh);
@@ -887,8 +894,6 @@
 
             loadGLBSmart(weaponObj.modelFile, (gltf) => {
                 current3DWeaponMesh = gltf.scene;
-
-                // Rotate 180 degrees so gun barrel points FORWARD (-Z) instead of backward
                 current3DWeaponMesh.rotation.y = Math.PI;
 
                 const bbox = new THREE.Box3().setFromObject(current3DWeaponMesh);
@@ -896,14 +901,14 @@
                 const maxDim = Math.max(size.x, size.y, size.z);
 
                 if (maxDim > 0) {
-                    let targetScale = 0.45 / maxDim;
+                    let targetScale = 0.25 / maxDim; // Adjusted scale to fit smaller player model
                     current3DWeaponMesh.scale.set(targetScale, targetScale, targetScale);
 
                     const center = bbox.getCenter(new THREE.Vector3());
                     current3DWeaponMesh.position.set(
-                        0.22 - center.x * targetScale,
-                        -0.18 - center.y * targetScale,
-                        -0.45 - center.z * targetScale
+                        0.12 - center.x * targetScale,
+                        -0.10 - center.y * targetScale,
+                        -0.25 - center.z * targetScale
                     );
                 }
 
@@ -915,8 +920,8 @@
             }, (err) => {
                 const meshGroup = new THREE.Group();
                 const mat = new THREE.MeshStandardMaterial({ color: 0x2b303a, metalness: 0.8, roughness: 0.3 });
-                const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.4, 8), mat);
-                barrel.rotation.x = Math.PI / 2; barrel.position.set(0.18, -0.15, -0.4);
+                const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.3, 8), mat);
+                barrel.rotation.x = Math.PI / 2; barrel.position.set(0.1, -0.1, -0.25);
                 meshGroup.add(barrel);
                 
                 current3DWeaponMesh = meshGroup;
@@ -928,7 +933,7 @@
             viewmodelGroup = new THREE.Group();
 
             const activeWepId = player.equipped[activeSlot];
-            const activeWep = WEAPONS_CATALOG.find(w => w.id === activeWepId) || WEAPONS_CATALOG;
+            const activeWep = WEAPONS_CATALOG.find(w => w.id === activeWepId) || WEAPONS_CATALOG[0];
             load3DWeaponMesh(activeWep);
 
             camera.add(viewmodelGroup);
@@ -943,7 +948,7 @@
             });
 
             const wepId = player.equipped[slot];
-            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG;
+            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG[0];
             localState.clip = wep.clip; localState.reserve = wep.reserve;
             document.getElementById('ammo-clip').innerText = localState.clip;
             document.getElementById('ammo-reserve').innerText = localState.reserve;
@@ -952,7 +957,7 @@
         }
 
         // =======================================================
-        // 🗺️ RELIABLE DUST2 MAP LOADER WITH MULTI-PATH FALLBACKS
+        // 🗺️ RELIABLE DUST2 MAP LOADER WITH DRACO SUPPORT
         // =======================================================
         function createCSGOTDMArena() {
             loadGLBSmart('dust2.glb', (gltf) => {
@@ -963,7 +968,7 @@
                 const maxMapDim = Math.max(mapSize.x, mapSize.z);
 
                 if (maxMapDim > 0) {
-                    let desiredMapScale = 160 / maxMapDim;
+                    let desiredMapScale = 140 / maxMapDim;
                     mapScene.scale.set(desiredMapScale, desiredMapScale, desiredMapScale);
                 }
 
@@ -1041,6 +1046,9 @@
             });
         }
 
+        // =======================================================
+        // 🧍 PROPORTIONAL SOLDIER SCALING (0.55m HEIGHT TO FIT DUST2 DOORS & CRATES)
+        // =======================================================
         function createCSGOSoldierMesh(teamType) {
             const group = new THREE.Group();
             const primaryModel = teamType === 'CT' ? 'ct.glb' : 't.glb';
@@ -1051,7 +1059,7 @@
                 const bbox = new THREE.Box3().setFromObject(model);
                 const size = bbox.getSize(new THREE.Vector3());
                 if (size.y > 0) {
-                    const targetHeight = 1.8;
+                    const targetHeight = 0.55; // PROPORTIONAL HEIGHT FOR DUST2 MAP
                     const scaleFactor = targetHeight / size.y;
                     model.scale.set(scaleFactor, scaleFactor, scaleFactor);
                     
@@ -1067,7 +1075,7 @@
                     const bbox2 = new THREE.Box3().setFromObject(model2);
                     const size2 = bbox2.getSize(new THREE.Vector3());
                     if (size2.y > 0) {
-                        const scaleFactor2 = 1.8 / size2.y;
+                        const scaleFactor2 = 0.55 / size2.y;
                         model2.scale.set(scaleFactor2, scaleFactor2, scaleFactor2);
                         const newBbox2 = new THREE.Box3().setFromObject(model2);
                         model2.position.y = -newBbox2.min.y;
@@ -1080,22 +1088,23 @@
                     const bodyMat = new THREE.MeshStandardMaterial({ color: mainColor, roughness: 0.5, metalness: 0.2 });
                     const vestMat = new THREE.MeshStandardMaterial({ color: 0x11141a, roughness: 0.4 });
 
-                    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.35, 1.1, 12), bodyMat);
-                    body.position.y = 0.85; body.castShadow = true; group.add(body);
+                    // Procedural mini soldier
+                    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.35, 12), bodyMat);
+                    body.position.y = 0.25; body.castShadow = true; group.add(body);
 
-                    const vest = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.42, 0.7, 12), vestMat);
-                    vest.position.y = 0.95; group.add(vest);
+                    const vest = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.11, 0.22, 12), vestMat);
+                    vest.position.y = 0.28; group.add(vest);
 
-                    const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), new THREE.MeshStandardMaterial({ color: 0x151820 }));
-                    head.position.y = 1.6; group.add(head);
+                    const head = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), new THREE.MeshStandardMaterial({ color: 0x151820 }));
+                    head.position.y = 0.48; group.add(head);
 
-                    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16, 0, Math.PI * 2, 0, Math.PI / 1.7), bodyMat);
-                    helmet.position.y = 1.63; group.add(helmet);
+                    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 16, 0, Math.PI * 2, 0, Math.PI / 1.7), bodyMat);
+                    helmet.position.y = 0.49; group.add(helmet);
 
-                    const goggleGeo = new THREE.BoxGeometry(0.3, 0.1, 0.12);
+                    const goggleGeo = new THREE.BoxGeometry(0.1, 0.03, 0.04);
                     const goggleMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff, roughness: 0.1, metalness: 0.9, emissive: 0x00f0ff, emissiveIntensity: 0.2 });
                     const goggles = new THREE.Mesh(goggleGeo, goggleMat);
-                    goggles.position.set(0, 1.63, 0.2); group.add(goggles);
+                    goggles.position.set(0, 0.49, 0.07); group.add(goggles);
                 });
             });
 
@@ -1179,7 +1188,7 @@
 
         function reloadGun() {
             const wepId = player.equipped[activeSlot];
-            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG;
+            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG[0];
             if (localState.clip < wep.clip && localState.reserve > 0) {
                 playSoundEffect('RELOAD');
                 const needed = wep.clip - localState.clip;
@@ -1201,11 +1210,11 @@
 
         function throwGrenade(type) {
             if (gameState !== 'PLAYING') return;
-            const nadeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.3, 10), new THREE.MeshStandardMaterial({ color: 0x335522 }));
-            nadeMesh.position.set(localState.x, localState.posY + 1.8, localState.z);
+            const nadeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.12, 10), new THREE.MeshStandardMaterial({ color: 0x335522 }));
+            nadeMesh.position.set(localState.x, localState.posY + 0.5, localState.z);
 
             const forward = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(localState.pitchX, localState.rotY, 0, 'YXZ'));
-            const vel = forward.multiplyScalar(0.8); vel.y = 0.3;
+            const vel = forward.multiplyScalar(0.4); vel.y = 0.2;
 
             nadeMesh.userData = { type: type, vel: vel, timer: 90 };
             scene.add(nadeMesh); activeGrenades.push(nadeMesh);
@@ -1215,7 +1224,7 @@
             if (gameState !== 'PLAYING') return;
 
             const wepId = player.equipped[activeSlot];
-            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG;
+            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG[0];
 
             const now = Date.now();
             const delay = wep.fireRateDelay || 120;
@@ -1235,13 +1244,13 @@
             document.getElementById('ammo-clip').innerText = localState.clip;
 
             const wepId = player.equipped[activeSlot];
-            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG;
+            const wep = WEAPONS_CATALOG.find(w => w.id === wepId) || WEAPONS_CATALOG[0];
 
             playSoundEffect(wep.soundType || 'SHOOT_AK47');
 
             if (current3DWeaponMesh && !isScoped) {
-                current3DWeaponMesh.position.z += 0.08;
-                setTimeout(() => { if (current3DWeaponMesh) current3DWeaponMesh.position.z -= 0.08; }, 50);
+                current3DWeaponMesh.position.z += 0.04;
+                setTimeout(() => { if (current3DWeaponMesh) current3DWeaponMesh.position.z -= 0.04; }, 50);
             }
 
             const raycaster = new THREE.Raycaster();
@@ -1257,8 +1266,8 @@
                     document.getElementById('ct-score-val').innerText = kills;
                     addKillFeedMsg(`Player 🔫 Bot Max (${wep.name})`);
                     remotePlayerState.hp = 100;
-                    remotePlayerState.x = (Math.random() - 0.5) * 50;
-                    remotePlayerState.z = (Math.random() - 0.5) * 50;
+                    remotePlayerState.x = (Math.random() - 0.5) * 40;
+                    remotePlayerState.z = (Math.random() - 0.5) * 40;
                     if (kills >= TARGET_KILLS) endGame(true);
                 }
             }
@@ -1276,25 +1285,21 @@
                 }
 
                 localState.isCrouching = keys['c'] || keys['ჩ'];
-                let targetMaxSpeed = localState.isCrouching ? 0.09 : (isScoped ? 0.08 : 0.22);
-                let accel = 0.045;
+                let targetMaxSpeed = localState.isCrouching ? 0.05 : (isScoped ? 0.04 : 0.12);
+                let accel = 0.025;
                 let friction = 0.78;
 
                 if ((keys['space'] || keys[' ']) && !localState.isJumping) {
-                    localState.velY = 0.25; localState.isJumping = true;
+                    localState.velY = 0.15; localState.isJumping = true;
                 }
 
                 let targetY = 0;
                 if (localState.x >= -65 && localState.x <= -25 && localState.z >= -57.5 && localState.z <= -22.5) {
-                    targetY = 6;
-                }
-                if (localState.x >= -51 && localState.x <= -39 && localState.z >= -21 && localState.z <= -6) {
-                    let progress = (localState.z - (-21)) / (-6 - (-21));
-                    targetY = Math.max(0, Math.min(6, progress * 6));
+                    targetY = 2;
                 }
 
                 if (localState.isJumping) {
-                    localState.posY += localState.velY; localState.velY -= 0.014;
+                    localState.posY += localState.velY; localState.velY -= 0.01;
                     if (localState.posY <= targetY) { localState.posY = targetY; localState.velY = 0; localState.isJumping = false; }
                 } else {
                     localState.posY = targetY;
@@ -1334,20 +1339,20 @@
                 localState.x += localState.vx;
                 localState.z += localState.vz;
 
-                localState.x = Math.max(-87, Math.min(87, localState.x));
-                localState.z = Math.max(-87, Math.min(87, localState.z));
+                localState.x = Math.max(-70, Math.min(70, localState.x));
+                localState.z = Math.max(-70, Math.min(70, localState.z));
 
-                let isMoving = curSpeed > 0.02;
+                let isMoving = curSpeed > 0.01;
                 if (isMoving && !localState.isJumping) {
                     localState.walkTime += curSpeed * 42;
                 } else {
                     localState.walkTime = THREE.MathUtils.lerp(localState.walkTime, 0, 0.1);
                 }
 
-                let headBobY = Math.sin(localState.walkTime) * (isMoving ? 0.05 : 0.01);
-                let headBobX = Math.cos(localState.walkTime * 0.5) * (isMoving ? 0.03 : 0.005);
-                let weaponSwayX = Math.cos(localState.walkTime * 0.5) * (isMoving ? 0.02 : 0.003);
-                let weaponSwayY = Math.sin(localState.walkTime) * (isMoving ? 0.02 : 0.003);
+                let headBobY = Math.sin(localState.walkTime) * (isMoving ? 0.02 : 0.005);
+                let headBobX = Math.cos(localState.walkTime * 0.5) * (isMoving ? 0.01 : 0.002);
+                let weaponSwayX = Math.cos(localState.walkTime * 0.5) * (isMoving ? 0.01 : 0.002);
+                let weaponSwayY = Math.sin(localState.walkTime) * (isMoving ? 0.01 : 0.002);
 
                 if (localPlayerMesh) {
                     localPlayerMesh.position.set(localState.x, localState.posY, localState.z);
@@ -1357,7 +1362,7 @@
                 }
 
                 if (cameraMode === 'FPP') {
-                    const baseCamY = localState.posY + (localState.isCrouching ? 1.3 : 2.5);
+                    const baseCamY = localState.posY + (localState.isCrouching ? 0.35 : 0.50); // PROPORTIONAL EYE-LEVEL CAMERA
                     camera.position.set(localState.x + headBobX * 0.3, baseCamY + headBobY, localState.z);
                     camera.rotation.set(localState.pitchX, localState.rotY, 0, 'YXZ');
 
@@ -1367,13 +1372,13 @@
                     }
                     if (localPlayerMesh) localPlayerMesh.visible = false;
                 } else {
-                    const distBehind = 6.5;
+                    const distBehind = 2.5;
                     const camX = localState.x - forward.x * distBehind;
                     const camZ = localState.z - forward.z * distBehind;
-                    const camY = localState.posY + (localState.isCrouching ? 2.5 : 3.8);
+                    const camY = localState.posY + (localState.isCrouching ? 0.8 : 1.2);
 
                     camera.position.set(camX, camY, camZ);
-                    camera.lookAt(localState.x + forward.x * 2, localState.posY + (localState.isCrouching ? 1.2 : 2.2), localState.z + forward.z * 2);
+                    camera.lookAt(localState.x + forward.x * 2, localState.posY + (localState.isCrouching ? 0.35 : 0.50), localState.z + forward.z * 2);
 
                     if (viewmodelGroup) viewmodelGroup.visible = false;
                     if (localPlayerMesh) localPlayerMesh.visible = true;
@@ -1385,10 +1390,10 @@
                     let dist = Math.hypot(dx, dz);
                     remotePlayerState.rotY = Math.atan2(dx, dz);
 
-                    if (dist > 6) {
+                    if (dist > 3) {
                         remotePlayerState.walkTime += 0.15;
-                        remotePlayerState.x += Math.sin(remotePlayerState.rotY) * 0.07;
-                        remotePlayerState.z += Math.cos(remotePlayerState.rotY) * 0.07;
+                        remotePlayerState.x += Math.sin(remotePlayerState.rotY) * 0.035;
+                        remotePlayerState.z += Math.cos(remotePlayerState.rotY) * 0.035;
                     }
                 }
 
@@ -1401,8 +1406,8 @@
                 }
 
                 activeGrenades.forEach((nade, idx) => {
-                    nade.position.add(nade.userData.vel); nade.userData.vel.y -= 0.015; nade.userData.timer--;
-                    if (nade.position.y <= 0.2 || nade.userData.timer <= 0) {
+                    nade.position.add(nade.userData.vel); nade.userData.vel.y -= 0.01; nade.userData.timer--;
+                    if (nade.position.y <= 0.1 || nade.userData.timer <= 0) {
                         playSoundEffect('EXPLOSION');
                         scene.remove(nade); activeGrenades.splice(idx, 1);
                     }
